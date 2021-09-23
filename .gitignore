@@ -4,4 +4,5 @@ codes/__pycache__/
 *.pot
 *.egg-info
 MANIFAST
+codes/.ipynb_checkpoints/
 __pycache__
