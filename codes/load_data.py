@@ -21,15 +21,50 @@ train_frac = 0.7
 # sc = StandardScaler()
 # mm = MinMaxScaler()
 
+import torch
+from torch.utils.data import TensorDataset
+from torch.utils.data import DataLoader
 
+from fair_eval import *
 
+def obtain_newDS(train_loader, select_loader,ses, sidx, batch_size = 32):
+    ds1 = []
+    for i, tss in enumerate(train_loader.dataset.tensors):
+        ds1.append(np.append(tss,ses[i],axis = 0))
+    ds2 = []
+    for tss in select_loader.dataset.tensors:
+        ds2.append(np.delete(tss,sidx.detach().cpu(),axis=0))
+    tr_loader = DataLoader(NPsDataSet(ds1[0],ds1[1],ds1[2]),batch_size = batch_size, shuffle=True)
+    se_loader = DataLoader(NPsDataSet(ds2[0],ds2[1],ds2[2]),batch_size = batch_size, shuffle=False)
+    
+    return tr_loader, se_loader
+
+class NPsDataSet(TensorDataset):
+
+    def __init__(self, *dataarrays):
+        tensors = (torch.tensor(da).float() for da in dataarrays)
+        super(NPsDataSet, self).__init__(*tensors)
+
+def divide_groupsDL(x,y,z, batch_size = 32):
+    zs = transform_dum2cat(z).flatten()
+#     print(zs)
+    zsu = np.unique(zs)
+    dataloaders = {}
+    for zu in zsu:
+        z_idx = zs == zu
+        xx = x[z_idx]
+        yy = y[z_idx]
+        daloader = DataLoader(NPsDataSet(xx,yy),batch_size = 32,shuffle=False)
+        dataloaders[zu]= daloader
+    return dataloaders
+        
 def load_singlefold(savepath):
 #     filepath = savepath+'_%d.npz'%i
     with open(savepath,'rb') as f:
         Xtr,Xte,ytr,yte,Ztr,Zte = pickle.load(f)
     return Xtr,Xte,ytr,yte,Ztr,Zte
 
-def read_german(filepath='../data/german.data-numeric', svm =False,random_state=42, intercept = False):
+def load_german_data(filepath='../data/german.data-numeric', svm =False,random_state=42, intercept = False):
     """
     Read the german dataset.
 
@@ -103,12 +138,12 @@ def load_bank_data(filepath = '../data/bank-full.csv',load_data_size=None,svm=Fa
     bank['marital'].loc[bank['marital']!='married']=0
     bank['marital'].loc[bank['marital']=='married']=1
     
-    attrs = ['age', 'job', 'marital', 'education', 'default', 'balance', 'housing',
+    attrs = ['age', 'job', 'marital','sex','race', 'education', 'default', 'balance', 'housing',
        'loan', 'contact', 'day', 'month', 'duration', 'campaign', 'pdays',
        'previous', 'poutcome'] # all attributes
     int_attrs = ['age', 'balance','day','duration','campaign','pdays','previous'] # attributes with integer values -- the rest are categorical
-    sensitive_attrs = ['marital'] # the fairness constraints will be used for this feature
-    attrs_to_ignore = ['marital'] # sex and race are sensitive feature so we will not use them in classification, we will not consider fnlwght for classification since its computed externally and it highly predictive for the class (for details, see documentation of the adult data)
+    sensitive_attrs = ['marital','sex'] # the fairness constraints will be used for this feature
+    attrs_to_ignore = ['marital','sex','race'] # sex and race are sensitive feature so we will not use them in classification, we will not consider fnlwght for classification since its computed externally and it highly predictive for the class (for details, see documentation of the adult data)
     attrs_for_classification = set(attrs) - set(attrs_to_ignore)
   
 
@@ -126,7 +161,7 @@ def load_bank_data(filepath = '../data/bank-full.csv',load_data_size=None,svm=Fa
         else:
             attrs_to_vals[k] = []
         
-    
+#     print(x_control)
     if svm:
         bank['y'] = bank['y'].map({"no": -1, "yes": 1})
     else:
@@ -144,19 +179,25 @@ def load_bank_data(filepath = '../data/bank-full.csv',load_data_size=None,svm=Fa
 #             raise Exception("Invalid class label value")
 
 #         y.append(class_label)
-
-        for i in range(0,len(line)-1):
-            attr_name = attrs[i]
-            attr_val = line[i]
+#         if i ==0:
+#             print(line)
+#             print(len(line))
+        for j in range(0,len(line)):
+            attr_name = attrs[j]
+            attr_val = line[j]
                 # reducing dimensionality of some very sparse features
-
+#             if attr_name == 'previous':
+#                 print(attr_name,": ",line)
+#             if i ==0:
+#                 print(attr_name, attr_val)
             if attr_name in sensitive_attrs:
                 x_control[attr_name].append(attr_val)
             elif attr_name in attrs_to_ignore:
                 pass
             else:
                 attrs_to_vals[attr_name].append(attr_val)
-
+#     print(bank['previous'])
+#     print(attrs_to_vals['previous'])
     def convert_attrs_to_ints(d): # discretize the string attributes
         for attr_name, attr_vals in d.items():
             if attr_name in int_attrs: continue
@@ -183,18 +224,25 @@ def load_bank_data(filepath = '../data/bank-full.csv',load_data_size=None,svm=Fa
         
         attr_vals = attrs_to_vals[attr_name]
         if attr_name in int_attrs or attr_name == "native_country": # the way we encoded native country, its binary now so no need to apply one hot encoding on it
-
+            if attr_vals == []:
+                print(attr_name)
             X.append(attr_vals)
+#             print(attr_name,attr_vals)
 
         else:            
             attr_vals, index_dict = get_one_hot_encoding(attr_vals)
-
+#             print(attr_vals.shape)
             if attr_vals.shape==(45211,):
                 attr_vals=attr_vals.reshape(45211,1)
             for inner_col in attr_vals.T:                
-                X.append(inner_col) 
-
- 
+                X.append(inner_col)
+#                 if inner_col == []:
+#                     print(attr_name)
+                
+    for i,xx in enumerate(X):
+        if np.array(xx).shape != (45211,):
+            print(i,np.array(xx).shape)
+#     print(X)
     # convert to numpy arrays for easy handline
     X = np.array(X, dtype=float).T
     y = np.array(y, dtype = float)
@@ -215,7 +263,7 @@ def load_bank_data(filepath = '../data/bank-full.csv',load_data_size=None,svm=Fa
         y = y[:load_data_size]
         for k in x_control.keys():
             x_control[k] = x_control[k][:load_data_size]
-    
+#     print(x_control)
     n = X.shape[0]
     # Create train test split
     Z = np.expand_dims(x_control[k],axis=-1)
@@ -253,7 +301,7 @@ def load_adult_data(load_data_size=None,svm = False,random_state=42, intercept =
 
     attrs = ['age', 'workclass', 'fnlwgt', 'education', 'education_num', 'marital_status', 'occupation', 'relationship', 'race', 'sex', 'capital_gain', 'capital_loss', 'hours_per_week', 'native_country'] # all attributes
     int_attrs = ['age', 'fnlwgt', 'education_num', 'capital_gain', 'capital_loss', 'hours_per_week'] # attributes with integer values -- the rest are categorical
-    sensitive_attrs = ['sex'] # the fairness constraints will be used for this feature
+    sensitive_attrs = ['sex','race'] # the fairness constraints will be used for this feature
     attrs_to_ignore = ['sex', 'race','fnlwgt'] # sex and race are sensitive feature so we will not use them in classification, we will not consider fnlwght for classification since its computed externally and it highly predictive for the class (for details, see documentation of the adult data)
     attrs_for_classification = set(attrs) - set(attrs_to_ignore)
 
@@ -372,7 +420,7 @@ def load_adult_data(load_data_size=None,svm = False,random_state=42, intercept =
         y = y[:load_data_size]
         for k in x_control.keys():
             x_control[k] = x_control[k][:load_data_size]
-
+    print(x_control)
     if not svm:
         y = np.array((y+1)/2,dtype=np.uint32)
         print("for others min: ",min(y), "and max: ",max(y))
@@ -380,8 +428,11 @@ def load_adult_data(load_data_size=None,svm = False,random_state=42, intercept =
         print("for svm min: ",min(y), "and max: ",max(y))
     n = X.shape[0]
 #     print(x_control)
-    Z = np.expand_dims(x_control[k],axis=-1)
-#     print(Z.shape)
+    print(n)
+    Z = np.zeros((n,len(x_control.keys())))
+    for i,k in enumerate(x_control.keys()):
+        Z[:,i] = x_control[k]
+    print(Z.shape)
     tr_idx, te_idx = _get_train_test_split(n, train_frac, random_state)
     Xtr, Xte, ytr, yte, Ztr, Zte = _apply_train_test_split(X, y, Z,
                                                            tr_idx, te_idx)
