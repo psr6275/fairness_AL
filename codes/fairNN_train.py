@@ -22,7 +22,8 @@ def train_model(model, train_loader, criterion, optimizer, device, args, test_lo
             loss = criterion(p_y, y)
             loss.backward()
             optimizer.step()
-            acc = accuracy_b(p_y,y.detach().cpu())
+#             acc = accuracy_b(p_y,y.detach().cpu())
+            acc = accuracy_b(p_y,y)
             
             losses.update(loss,x.size(0))
             accs.update(acc,x.size(0))
@@ -31,8 +32,8 @@ def train_model(model, train_loader, criterion, optimizer, device, args, test_lo
 #                         epoch, batch_idx * len(y), len(train_loader.dataset),
 #                         100. * batch_idx / len(train_loader), loss.item())
 #                 print(message)
-        logs['loss'] = losses.avg
-        logs['acc'] = accs.avg
+        logs['loss'] = losses.avg.detach().cpu()
+        logs['acc'] = accs.avg.detach().cpu()
         if test_loader is not None:
             logs['val_loss'], logs['val_acc'] = test_model(model, test_loader, criterion, device)
         liveloss.update(logs)
@@ -49,10 +50,12 @@ def test_model(model, test_loader, criterion, device):
         p_y = model(x)
         loss = criterion(p_y,y)
         
-        acc = accuracy_b(p_y, y.detach().cpu())
+#         acc = accuracy_b(p_y, y.detach().cpu())
+        acc = accuracy_b(p_y, y)
         losses.update(loss,x.size(0))
         accs.update(acc,x.size(0))
-    return losses.avg, accs.avg
+#         print(losses.avg)
+    return losses.avg.detach().cpu(), accs.avg.detach().cpu()
 
 def test_model_noz(model, test_loader, criterion, device):
     model.eval()
@@ -64,10 +67,10 @@ def test_model_noz(model, test_loader, criterion, device):
         p_y = model(x)
         loss = criterion(p_y,y)
         
-        acc = accuracy_b(p_y, y.detach().cpu())
+        acc = accuracy_b(p_y, y)
         losses.update(loss,x.size(0))
         accs.update(acc,x.size(0))
-    return losses.avg, accs.avg
+    return losses.avg.detach().cpu(), accs.avg.detach().cpu()
 
 class Classifier(nn.Module):
 
