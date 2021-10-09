@@ -137,13 +137,13 @@ def load_bank_data(filepath = '../data/bank-full.csv',load_data_size=None,svm=Fa
     bank = pd.read_csv(filepath)
     bank['marital'].loc[bank['marital']!='married']=0
     bank['marital'].loc[bank['marital']=='married']=1
-    
-    attrs = ['age', 'job', 'marital','sex','race', 'education', 'default', 'balance', 'housing',
-       'loan', 'contact', 'day', 'month', 'duration', 'campaign', 'pdays',
-       'previous', 'poutcome'] # all attributes
+    attrs = bank.columns
+#     attrs = ['age', 'job', 'marital', 'education', 'default', 'balance', 'housing',
+#        'loan', 'contact', 'day', 'month', 'duration', 'campaign', 'pdays',
+#        'previous', 'poutcome', 'y'] # all attributes
     int_attrs = ['age', 'balance','day','duration','campaign','pdays','previous'] # attributes with integer values -- the rest are categorical
-    sensitive_attrs = ['marital','sex'] # the fairness constraints will be used for this feature
-    attrs_to_ignore = ['marital','sex','race'] # sex and race are sensitive feature so we will not use them in classification, we will not consider fnlwght for classification since its computed externally and it highly predictive for the class (for details, see documentation of the adult data)
+    sensitive_attrs = ['marital'] # the fairness constraints will be used for this feature
+    attrs_to_ignore = ['marital'] # sex and race are sensitive feature so we will not use them in classification, we will not consider fnlwght for classification since its computed externally and it highly predictive for the class (for details, see documentation of the adult data)
     attrs_for_classification = set(attrs) - set(attrs_to_ignore)
   
 
@@ -223,14 +223,18 @@ def load_bank_data(filepath = '../data/bank-full.csv',load_data_size=None,svm=Fa
     for attr_name in attrs_for_classification:
         
         attr_vals = attrs_to_vals[attr_name]
+#         print(attr_name)
+#         print(attr_vals[0])
         if attr_name in int_attrs or attr_name == "native_country": # the way we encoded native country, its binary now so no need to apply one hot encoding on it
-            if attr_vals == []:
-                print(attr_name)
+#             if attr_vals == []:
+#                 print(attr_name)
             X.append(attr_vals)
 #             print(attr_name,attr_vals)
 
-        else:            
+        else:
+            
             attr_vals, index_dict = get_one_hot_encoding(attr_vals)
+#             print(attr_vals[0])
 #             print(attr_vals.shape)
             if attr_vals.shape==(45211,):
                 attr_vals=attr_vals.reshape(45211,1)
@@ -242,7 +246,8 @@ def load_bank_data(filepath = '../data/bank-full.csv',load_data_size=None,svm=Fa
     for i,xx in enumerate(X):
         if np.array(xx).shape != (45211,):
             print(i,np.array(xx).shape)
-#     print(X)
+#     print(len(X),len(X[0]))
+#     print(X[:3])
     # convert to numpy arrays for easy handline
     X = np.array(X, dtype=float).T
     y = np.array(y, dtype = float)
@@ -301,7 +306,7 @@ def load_adult_data(load_data_size=None,svm = False,random_state=42, intercept =
 
     attrs = ['age', 'workclass', 'fnlwgt', 'education', 'education_num', 'marital_status', 'occupation', 'relationship', 'race', 'sex', 'capital_gain', 'capital_loss', 'hours_per_week', 'native_country'] # all attributes
     int_attrs = ['age', 'fnlwgt', 'education_num', 'capital_gain', 'capital_loss', 'hours_per_week'] # attributes with integer values -- the rest are categorical
-    sensitive_attrs = ['sex','race'] # the fairness constraints will be used for this feature
+    sensitive_attrs = ['sex'] # the fairness constraints will be used for this feature
     attrs_to_ignore = ['sex', 'race','fnlwgt'] # sex and race are sensitive feature so we will not use them in classification, we will not consider fnlwght for classification since its computed externally and it highly predictive for the class (for details, see documentation of the adult data)
     attrs_for_classification = set(attrs) - set(attrs_to_ignore)
 
@@ -459,7 +464,8 @@ def load_compas_data(COMPAS_INPUT_FILE = "../data/compas.csv", svm = False,rando
     FEATURES_CLASSIFICATION = ["age_cat", "race", "sex", "priors_count", "c_charge_degree"] #features to be used for classification
     CONT_VARIABLES = ["priors_count"] # continuous features, will need to be handled separately from categorical features, categorical features will be encoded using one-hot
     CLASS_FEATURE = "two_year_recid" # the decision variable
-    SENSITIVE_ATTRS = ["race", "sex"]
+#     SENSITIVE_ATTRS = ["race", "sex"]
+    SENSITIVE_ATTRS = ["sex"]
 
 
     # load the data and get some stats

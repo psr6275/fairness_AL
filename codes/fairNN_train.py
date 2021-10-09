@@ -3,10 +3,52 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from livelossplot import PlotLosses
+from livelossplot import PlotLosses
+
 from eval_utils import *
-def train_model(model, train_loader, criterion, optimizer, device, args, test_loader = None):
-    model.train()
+from fairAL_utils import divide_groupsDL, cal_meangrad, select_examples, select_random
+from load_data import obtain_newDS
+
+def train_AL(train_loader, select_loader, device, args = None, test_loader = None, from_scratch = True, random_sel = False):
+    if args is None:
+        args = Args()
+    print("arguments: ", args.print_args())
+    n_features = train_loader.dataset.tensors[0].shape[1]
+    if from_scratch ==False:
+        clf = Classifier(n_features=n_features)
+        clf_criterion = nn.BCELoss()
+        clf_optimizer = optim.Adam(clf.parameters())
     liveloss = PlotLosses()
+    assert((args.AL_iters-1)*args.AL_batch<select_loader.dataset.tensors[0].shape[0])
+    for it in range(args.AL_iters):
+        if from_scratch:
+            clf = Classifier(n_features=n_features)
+            clf_criterion = nn.BCELoss()
+            clf_optimizer = optim.Adam(clf.parameters())
+        clf.cuda()
+        train_model(clf, train_loader, clf_criterion, clf_optimizer, device, args, test_loader, liveloss)
+        sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
+        if it <args.AL_iters-1:
+            grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
+            if random_sel:
+                ses,sidx = select_random(clf, select_loader,device, args.AL_batch)
+            else:
+                ses,sidx = select_examples(clf, select_loader, clf_criterion, grads,device, args.AL_batch)
+            
+            
+#             print(ses)
+            train_loader, select_loader = obtain_newDS(train_loader, select_loader, ses, sidx, args.batch_size)
+#         print(train_loader.dataset.tensors[0].shape)
+#         print(test_loader.dataset.tensors[0].shape)
+#     print(train_loader.dataset.tensors[0].shape)
+#     print(select_loader.dataset.tensors[0].shape)
+    return clf, train_loader, select_loader    
+
+
+def train_model(model, train_loader, criterion, optimizer, device, args, test_loader = None, liveloss = None):
+    model.train()
+    if liveloss is None:
+        liveloss = PlotLosses()
 #     groups = {'acccuracy': ['acc', 'val_acc'], 'log-loss': ['loss', 'val_loss']}
 #     plotlosses = PlotLosses(groups=groups, outputs=outputs)
     logs = {}
@@ -22,8 +64,8 @@ def train_model(model, train_loader, criterion, optimizer, device, args, test_lo
             loss = criterion(p_y, y)
             loss.backward()
             optimizer.step()
-#             acc = accuracy_b(p_y,y.detach().cpu())
-            acc = accuracy_b(p_y,y)
+            acc = accuracy_b(p_y,y.detach().cpu())
+#             acc = accuracy_b(p_y,y)
             
             losses.update(loss,x.size(0))
             accs.update(acc,x.size(0))
@@ -50,8 +92,8 @@ def test_model(model, test_loader, criterion, device):
         p_y = model(x)
         loss = criterion(p_y,y)
         
-#         acc = accuracy_b(p_y, y.detach().cpu())
-        acc = accuracy_b(p_y, y)
+        acc = accuracy_b(p_y, y.detach().cpu())
+#         acc = accuracy_b(p_y, y)
         losses.update(loss,x.size(0))
         accs.update(acc,x.size(0))
 #         print(losses.avg)
@@ -66,11 +108,29 @@ def test_model_noz(model, test_loader, criterion, device):
         y = y.to(device)
         p_y = model(x)
         loss = criterion(p_y,y)
-        
-        acc = accuracy_b(p_y, y)
+        acc = accuracy_b(p_y, y.detach().cpu())
+#         acc = accuracy_b(p_y, y)
         losses.update(loss,x.size(0))
         accs.update(acc,x.size(0))
     return losses.avg.detach().cpu(), accs.avg.detach().cpu()
+
+def test_groupwise(clf, data_loader, clf_criterion, device,args):
+    dlTensors = data_loader.dataset.tensors
+    dldic = divide_groupsDL(dlTensors[0],dlTensors[1],dlTensors[2])
+    losss = 0
+    accs = 0
+    sid = list(dldic.keys())[0]
+    for did in dldic.keys():
+        loss_v, acc_v = test_model_noz(clf, dldic[did],clf_criterion, device)
+        print("{} : loss {} / acc {}".format(did, loss_v, acc_v))
+        if args.AL_select == 'loss':
+            if losss < loss_v:
+                sid = did
+        else:
+            assert args.AL_select == 'acc'
+            if accs > acc_v:
+                sid = did
+    return sid, dldic
 
 class Classifier(nn.Module):
 
