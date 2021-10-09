@@ -4,6 +4,7 @@ import autograd_hacks
 import numpy as np
 from torch.utils.data import DataLoader
 from load_data import *
+import random
 
 def select_examples(clf,select_loader,criterion, grad_z, device, nsample = 32):
     aa = torch.topk(compute_gradsim(clf, select_loader, criterion, grad_z, device),nsample)
@@ -12,7 +13,12 @@ def select_examples(clf,select_loader,criterion, grad_z, device, nsample = 32):
         ses.append(ts[aa[1]])
     return ses,aa[1]
 
-
+def select_random(clf,select_loader,device, nsample = 32):
+    aa = random.sample(list(range(select_loader.dataset.tensors[0].size(0))),nsample)
+    ses = []
+    for ts in select_loader.dataset.tensors:
+        ses.append(ts[aa])
+    return ses,torch.tensor(aa)
 
 def group_grad(clf, dldic, criterion, device):
     grads={}
