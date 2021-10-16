@@ -24,6 +24,7 @@ train_frac = 0.7
 import torch
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
+import random
 
 from fair_eval import *
 
@@ -44,7 +45,25 @@ class NPsDataSet(TensorDataset):
     def __init__(self, *dataarrays):
         tensors = (torch.tensor(da).float() for da in dataarrays)
         super(NPsDataSet, self).__init__(*tensors)
-
+def train_valid_split(train_loader,train_num,val_ratio = 0.2,random_seed = 7):
+    random.seed(random_seed)
+    trainDS = train_loader.dataset
+    valid_num = int(train_num*val_ratio)
+    sp_idx = list(range(train_num))
+    random.shuffle(sp_idx)
+    sp_idx = sp_idx[:valid_num]
+    trds = []
+    valds = []
+    for tss in train_loader.dataset.tensors:
+        trds.append(np.delete(tss,sp_idx,axis=0))
+        valds.append(tss[sp_idx])
+        
+    trloader = DataLoader(NPsDataSet(trds[0],trds[1],trds[2]),batch_size = train_loader.batch_size,shuffle=True)
+    valloader = DataLoader(NPsDataSet(valds[0],valds[1],valds[2]),batch_size =train_loader.batch_size,shuffle=False)
+    return trloader, valloader
+    
+    
+    
 def divide_groupsDL(x,y,z, batch_size = 32):
     zs = transform_dum2cat(z).flatten()
 #     print(zs)

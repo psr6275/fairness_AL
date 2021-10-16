@@ -7,32 +7,104 @@ from livelossplot import PlotLosses
 
 from eval_utils import *
 from fairAL_utils import divide_groupsDL, cal_meangrad, select_examples, select_random
-from load_data import obtain_newDS
+from load_data import obtain_newDS,train_valid_split
 
-def train_AL(train_loader, select_loader, device, args = None, test_loader = None, from_scratch = True, random_sel = False):
+class Args:
+    def __init__(self):
+        self.epochs = 30
+        self.max_epochs = 40
+        self.AL_iters = 10 # AL batch 몇 번 뽑는지?
+        self.AL_batch = 32 # AL 시에 select 되는 데이터 수
+        self.batch_size = 32
+        self.AL_select = 'loss'
+        
+    def print_args(self):
+        print("train epochs/batch: {}/{}".format(self.epochs,self.batch_size))
+        print("AL iters/batch: {}/{}".format(self.AL_iters,self.AL_batch))
+        print("AL selection is based on ", self.AL_select)
+
+def train_AL(train_loader, select_loader, device, args = None, test_loader = None,clf_type='NN',\
+             from_scratch = True, random_sel = False):
     if args is None:
         args = Args()
+
     print("arguments: ", args.print_args())
     n_features = train_loader.dataset.tensors[0].shape[1]
     if from_scratch ==False:
-        clf = Classifier(n_features=n_features)
+        if clf_type == 'NN':
+            clf = Classifier(n_features=n_features)
+        else:
+            clf = ClassifierLR(n_features=n_features)
         clf_criterion = nn.BCELoss()
         clf_optimizer = optim.Adam(clf.parameters())
     liveloss = PlotLosses()
     assert((args.AL_iters-1)*args.AL_batch<select_loader.dataset.tensors[0].shape[0])
     for it in range(args.AL_iters):
         if from_scratch:
-            clf = Classifier(n_features=n_features)
+            if clf_type =='NN':
+                clf = Classifier(n_features=n_features)
+            else:
+                clf = ClassifierLR(n_features=n_features)
             clf_criterion = nn.BCELoss()
             clf_optimizer = optim.Adam(clf.parameters())
-        clf.cuda()
-        train_model(clf, train_loader, clf_criterion, clf_optimizer, device, args, test_loader, liveloss)
-        sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
+        clf.to(device)
+        
+        train_model(clf, train_loader, clf_criterion, clf_optimizer, device, args.epochs, test_loader, liveloss)
+        
         if it <args.AL_iters-1:
-            grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
             if random_sel:
                 ses,sidx = select_random(clf, select_loader,device, args.AL_batch)
             else:
+                sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
+                grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
+                ses,sidx = select_examples(clf, select_loader, clf_criterion, grads,device, args.AL_batch)
+            
+            
+#             print(ses)
+            train_loader, select_loader = obtain_newDS(train_loader, select_loader, ses, sidx, args.batch_size)
+#         print(train_loader.dataset.tensors[0].shape)
+#         print(test_loader.dataset.tensors[0].shape)
+#     print(train_loader.dataset.tensors[0].shape)
+#     print(select_loader.dataset.tensors[0].shape)
+    return clf, train_loader, select_loader    
+
+def train_AL_valid(train_loader, select_loader, device, args = None, test_loader = None, clf_type='NN', from_scratch = True,\
+                   random_sel = False,val_ratio = 0.2):
+    if args is None:
+        args = Args()
+
+    print("arguments: ", args.print_args())
+    n_features = train_loader.dataset.tensors[0].shape[1]
+    if from_scratch ==False:
+        if clf_type == 'NN':
+            clf = Classifier(n_features=n_features)
+        else:
+            clf = ClassifierLR(n_features=n_features)
+        clf_criterion = nn.BCELoss()
+        clf_optimizer = optim.Adam(clf.parameters())
+    liveloss = PlotLosses()
+    assert((args.AL_iters-1)*args.AL_batch<select_loader.dataset.tensors[0].shape[0])
+    tr_num = train_loader.dataset.tensors[0].size(0)
+    for it in range(args.AL_iters):
+        if from_scratch:
+            if clf_type =='NN':
+                clf = Classifier(n_features=n_features)
+            else:
+                clf = ClassifierLR(n_features=n_features)
+            clf_criterion = nn.BCELoss()
+            clf_optimizer = optim.Adam(clf.parameters())
+        clf.to(device)
+        #### train_valid_split ####
+        tr_loader, val_loader = train_valid_split(train_loader,tr_num,val_ratio,random_seed = it)
+        
+        train_model(clf, tr_loader, clf_criterion, clf_optimizer, device, args.epochs, test_loader, liveloss)
+
+        if it <args.AL_iters-1:
+            if random_sel:
+                ses,sidx = select_random(clf, select_loader,device, args.AL_batch)
+            else:
+                sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
+                grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
                 ses,sidx = select_examples(clf, select_loader, clf_criterion, grads,device, args.AL_batch)
             
             
@@ -45,18 +117,20 @@ def train_AL(train_loader, select_loader, device, args = None, test_loader = Non
     return clf, train_loader, select_loader    
 
 
-def train_model(model, train_loader, criterion, optimizer, device, args, test_loader = None, liveloss = None):
+
+def train_model(model, train_loader, criterion, optimizer, device, epochs, test_loader = None, liveloss = None):
     model.train()
     if liveloss is None:
         liveloss = PlotLosses()
 #     groups = {'acccuracy': ['acc', 'val_acc'], 'log-loss': ['loss', 'val_loss']}
 #     plotlosses = PlotLosses(groups=groups, outputs=outputs)
     logs = {}
-    for epoch in range(args.epochs):
+    for epoch in range(epochs):
         model.train()
         losses = AverageVarMeter()
         accs = AverageVarMeter()
         for batch_idx, (x,y, _) in enumerate(train_loader):
+#             print(device)
             x = x.to(device)
             y = y.to(device)
             optimizer.zero_grad()
@@ -64,9 +138,9 @@ def train_model(model, train_loader, criterion, optimizer, device, args, test_lo
             loss = criterion(p_y, y)
             loss.backward()
             optimizer.step()
-            acc = accuracy_b(p_y,y.detach().cpu())
+            acc = accuracy_b(p_y,y)
 #             acc = accuracy_b(p_y,y)
-            
+            print(loss)
             losses.update(loss,x.size(0))
             accs.update(acc,x.size(0))
 #             if batch_idx % args.log_interval ==0:
@@ -74,6 +148,7 @@ def train_model(model, train_loader, criterion, optimizer, device, args, test_lo
 #                         epoch, batch_idx * len(y), len(train_loader.dataset),
 #                         100. * batch_idx / len(train_loader), loss.item())
 #                 print(message)
+#         print(losses)
         logs['loss'] = losses.avg.detach().cpu()
         logs['acc'] = accs.avg.detach().cpu()
         if test_loader is not None:
@@ -92,7 +167,7 @@ def test_model(model, test_loader, criterion, device):
         p_y = model(x)
         loss = criterion(p_y,y)
         
-        acc = accuracy_b(p_y, y.detach().cpu())
+        acc = accuracy_b(p_y, y)
 #         acc = accuracy_b(p_y, y)
         losses.update(loss,x.size(0))
         accs.update(acc,x.size(0))
@@ -108,7 +183,7 @@ def test_model_noz(model, test_loader, criterion, device):
         y = y.to(device)
         p_y = model(x)
         loss = criterion(p_y,y)
-        acc = accuracy_b(p_y, y.detach().cpu())
+        acc = accuracy_b(p_y, y)
 #         acc = accuracy_b(p_y, y)
         losses.update(loss,x.size(0))
         accs.update(acc,x.size(0))
@@ -118,19 +193,37 @@ def test_groupwise(clf, data_loader, clf_criterion, device,args):
     dlTensors = data_loader.dataset.tensors
     dldic = divide_groupsDL(dlTensors[0],dlTensors[1],dlTensors[2])
     losss = 0
-    accs = 0
+    accs = 100.0
     sid = list(dldic.keys())[0]
     for did in dldic.keys():
         loss_v, acc_v = test_model_noz(clf, dldic[did],clf_criterion, device)
         print("{} : loss {} / acc {}".format(did, loss_v, acc_v))
         if args.AL_select == 'loss':
+#             print(losss,loss_v,sid,did)
             if losss < loss_v:
+                print(sid,did)
                 sid = did
+                losss = loss_v               
         else:
+#             print(did,acc_v,accs)
             assert args.AL_select == 'acc'
+#             print(accs > acc_v)
             if accs > acc_v:
+#                 print(sid,did)
                 sid = did
+                accs = acc_v
     return sid, dldic
+class ClassifierLR(nn.Module):
+
+    def __init__(self, n_features, n_hidden=32, p_dropout=0.2):
+        super(ClassifierLR, self).__init__()
+        self.network = nn.Sequential(
+            nn.Linear(n_features, 1)
+        )
+
+    def forward(self, x):
+        return torch.sigmoid(self.network(x))
+
 
 class Classifier(nn.Module):
 

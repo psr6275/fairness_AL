@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader
 from load_data import *
 import random
 
+
+
 def select_examples(clf,select_loader,criterion, grad_z, device, nsample = 32):
     aa = torch.topk(compute_gradsim(clf, select_loader, criterion, grad_z, device),nsample)
     ses = []
@@ -27,7 +29,7 @@ def group_grad(clf, dldic, criterion, device):
         print(did)
         grads[did] = cal_meangrad(clf, dldic[did], criterion, device)
     return grads
-def cal_meangrad(clf, dataloader, criterion, device):
+def cal_meangrad(clf, dataloader, criterion, device,normalize=True):
     
     for i,(x,y) in enumerate(dataloader):
         x = x.to(device)
@@ -44,10 +46,32 @@ def cal_meangrad(clf, dataloader, criterion, device):
         else:
             grads += grads_t
     prgrad_n = torch.norm(grads)
-    grads /= prgrad_n
+    if normalize:
+        grads /= prgrad_n
     grads = grads.detach().cpu()
     return grads
-
+def compute_gradnorm(clf, select_loader, criterion, device):
+    clf.eval()
+    autograd_hacks.add_hooks(clf)
+    norms = []
+    for i, (x,y,_) in enumerate(select_loader):
+        x = x.to(device)
+        y = y.to(device)
+        clf.zero_grad()
+        clear_backprops(clf)
+        outs = clf(x)
+        count_backprops(clf)
+        criterion(outs,y).backward()
+        remove_backprops(clf)
+        autograd_hacks.compute_grad1(clf)
+        tmp = []
+        for j, param in enumerate(clf.parameters()):
+            tmp.append(param.grad1.reshape(x.size(0),-1))
+        grad_t = torch.cat(tmp,dim=1).cuda()
+#         print(grad_t)
+#         print(grad_z)
+        norms.append(torch.norm(grad_t,grad_t))
+    return torch.cat(norms).detach().cpu()
 def compute_gradsim(clf, select_loader, criterion, grad_z,device):
     clf.eval()
     autograd_hacks.add_hooks(clf)
