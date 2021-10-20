@@ -6,3 +6,4 @@ codes/__pycache__/
 MANIFAST
 codes/.ipynb_checkpoints/
 __pycache__
+data/celeba

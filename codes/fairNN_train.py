@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from livelossplot import PlotLosses
-from livelossplot import PlotLosses
+
 
 from eval_utils import *
 from fairAL_utils import divide_groupsDL, cal_meangrad, select_examples, select_random
