@@ -8,3 +8,5 @@ codes/.ipynb_checkpoints/
 __pycache__
 data/celeba/
 data/utkface/
+data/*.zip
+
