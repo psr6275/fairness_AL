@@ -62,7 +62,12 @@ def train_valid_split(train_loader,train_num,val_ratio = 0.2,random_seed = 7):
     valloader = DataLoader(NPsDataSet(valds[0],valds[1],valds[2]),batch_size =train_loader.batch_size,shuffle=False)
     return trloader, valloader
     
-    
+def convert_object_type_to_category(df):
+    """Converts columns of type object to category."""
+    df = pd.concat([df.select_dtypes(include=[], exclude=['object']),
+                  df.select_dtypes(['object']).apply(pd.Series.astype, dtype='category')
+                  ], axis=1).reindex(df.columns, axis=1)
+    return df    
     
 def divide_groupsDL(x,y,z, batch_size = 32):
     zs = transform_dum2cat(z).flatten()
@@ -83,6 +88,116 @@ def load_singlefold(savepath):
         Xtr,Xte,ytr,yte,Ztr,Zte = pickle.load(f)
     return Xtr,Xte,ytr,yte,Ztr,Zte
 
+def load_adult_data(filepath = '../data/adult_proc.csv',svm=False,random_state=42, intercept=False,sensitive_attrs=None):
+    df = pd.read_csv(filepath)
+    attrs = df.columns
+    target_attr = ['income']
+    if sensitive_attrs is None:
+        sensitive_attrs = ['sex']
+    attrs_to_ignore = ['race','sex','marital-status']
+    attrs_for_classification = set(attrs) - set(attrs_to_ignore) - set(target_attr)
+    X = df[attrs_for_classification].values
+    y = df[target_attr].values
+    Z = df[sensitive_attrs].values
+    
+    if svm:
+        y = y*2-1
+    
+    n = X.shape[0]  # Number of examples
+
+    
+    # Create train test split
+    tr_idx, te_idx = _get_train_test_split(n, train_frac, random_state)
+    Xtr, Xte, ytr, yte, Ztr, Zte = _apply_train_test_split(X, y, Z,
+                                                           tr_idx, te_idx)
+    
+    mm = MinMaxScaler()
+    Xtr = mm.fit_transform(Xtr)
+    Xte = mm.transform(Xte)
+    
+    if intercept:
+        Xtr, Xte = _add_intercept(Xtr, Xte)
+    
+    return Xtr, Xte, ytr, yte, Ztr, Zte
+    
+def load_compas_data(filepath = '../data/compas_proc.csv',svm=False,random_state=42, intercept=False, sensitive_attrs = None):
+    """
+        race_map = {'Black':1.0,'White':0.0,'Other':2.0}
+        sex_map = {'Female':1.0,'Male':0.0}
+        ccd_map = {'F':1.0,'M':0.0}
+        # age_map = {'Greater than 45':2.0, '25 - 45':1.0, 'Less than 25':0.0}
+        recid_map = {'Yes':1.0,'No':0.0}
+    """
+    df = pd.read_csv(filepath)
+    attrs = df.columns
+    target_attr = ['is_recid']
+    if sensitive_attrs is None:
+        sensitive_attrs = ['race']
+    attrs_to_ignore = ['race','sex']
+    attrs_for_classification = set(attrs) - set(attrs_to_ignore) - set(target_attr)
+    X = df[attrs_for_classification].values
+    y = df[target_attr].values
+    Z = df[sensitive_attrs].values
+    
+    if svm:
+        y = y*2-1
+    
+    n = X.shape[0]  # Number of examples
+
+    
+    # Create train test split
+    tr_idx, te_idx = _get_train_test_split(n, train_frac, random_state)
+    Xtr, Xte, ytr, yte, Ztr, Zte = _apply_train_test_split(X, y, Z,
+                                                           tr_idx, te_idx)
+    
+    mm = MinMaxScaler()
+    Xtr = mm.fit_transform(Xtr)
+    Xte = mm.transform(Xte)
+    
+    if intercept:
+        Xtr, Xte = _add_intercept(Xtr, Xte)
+    
+    return Xtr, Xte, ytr, yte, Ztr, Zte
+
+def load_lsac_data(filepath='../data/lsac_proc.csv',svm=False,random_state=42,intercept=False,sensitive_attrs =None):
+
+    """
+    race_map = {'Black':1.0,'White':0.0,'Other':2.0}
+    sex_map = {'Female':1.0,'Male':0.0}
+    bar_map = {'Passed':1.0, 'Failed_or_not_attempted':0.0}
+    part_map = {'Yes':1.0,'No':0.0}
+    """
+    df = pd.read_csv(filepath)
+    attrs = df.columns
+    target_attr = ['pass_bar']
+    if sensitive_attrs is None:
+        sensitive_attrs = ['sex']
+    attrs_to_ignore = ['race','sex']
+    attrs_for_classification = set(attrs) - set(attrs_to_ignore) - set(target_attr)
+    X = df[attrs_for_classification].values
+    y = df[target_attr].values
+    Z = df[sensitive_attrs].values
+    
+    if svm:
+        y = y*2-1
+    
+    n = X.shape[0]  # Number of examples
+
+    
+    # Create train test split
+    tr_idx, te_idx = _get_train_test_split(n, train_frac, random_state)
+    Xtr, Xte, ytr, yte, Ztr, Zte = _apply_train_test_split(X, y, Z,
+                                                           tr_idx, te_idx)
+    
+    mm = MinMaxScaler()
+    Xtr = mm.fit_transform(Xtr)
+    Xte = mm.transform(Xte)
+    
+    if intercept:
+        Xtr, Xte = _add_intercept(Xtr, Xte)
+    
+    return Xtr, Xte, ytr, yte, Ztr, Zte
+    
 def load_german_data(filepath='../data/german.data-numeric', svm =False,random_state=42, intercept = False):
     """
     Read the german dataset.
@@ -316,298 +431,298 @@ def load_bank_data(filepath = '../data/bank-full.csv',load_data_size=None,svm=Fa
     
 
 
-def load_adult_data(load_data_size=None,svm = False,random_state=42, intercept = False):
+# def load_adult_data(load_data_size=None,svm = False,random_state=42, intercept = False):
 
-    """
-        if load_data_size is set to None (or if no argument is provided), then we load and return the whole data
-        if it is a number, say 10000, then we will return randomly selected 10K examples
-    """
+#     """
+#         if load_data_size is set to None (or if no argument is provided), then we load and return the whole data
+#         if it is a number, say 10000, then we will return randomly selected 10K examples
+#     """
 
-    attrs = ['age', 'workclass', 'fnlwgt', 'education', 'education_num', 'marital_status', 'occupation', 'relationship', 'race', 'sex', 'capital_gain', 'capital_loss', 'hours_per_week', 'native_country'] # all attributes
-    int_attrs = ['age', 'fnlwgt', 'education_num', 'capital_gain', 'capital_loss', 'hours_per_week'] # attributes with integer values -- the rest are categorical
-    sensitive_attrs = ['sex'] # the fairness constraints will be used for this feature
-    attrs_to_ignore = ['sex', 'race','fnlwgt'] # sex and race are sensitive feature so we will not use them in classification, we will not consider fnlwght for classification since its computed externally and it highly predictive for the class (for details, see documentation of the adult data)
-    attrs_for_classification = set(attrs) - set(attrs_to_ignore)
+#     attrs = ['age', 'workclass', 'fnlwgt', 'education', 'education_num', 'marital_status', 'occupation', 'relationship', 'race', 'sex', 'capital_gain', 'capital_loss', 'hours_per_week', 'native_country'] # all attributes
+#     int_attrs = ['age', 'fnlwgt', 'education_num', 'capital_gain', 'capital_loss', 'hours_per_week'] # attributes with integer values -- the rest are categorical
+#     sensitive_attrs = ['sex'] # the fairness constraints will be used for this feature
+#     attrs_to_ignore = ['sex', 'race','fnlwgt'] # sex and race are sensitive feature so we will not use them in classification, we will not consider fnlwght for classification since its computed externally and it highly predictive for the class (for details, see documentation of the adult data)
+#     attrs_for_classification = set(attrs) - set(attrs_to_ignore)
 
-    # adult data comes in two different files, one for training and one for testing, however, we will combine data from both the files
-    data_files = ["../data/adult.data", "../data/adult.test"]
-
-
-
-    X = []
-    y = []
-    x_control = {}
-
-    attrs_to_vals = {} # will store the values for each attribute for all users
-    for k in attrs:
-        if k in sensitive_attrs:
-            x_control[k] = []
-        elif k in attrs_to_ignore:
-            pass
-        else:
-            attrs_to_vals[k] = []
-
-    for f in data_files:
-#         check_data_file(f)
-
-        for line in open(f):
-            line = line.strip()
-            if line == "": continue # skip empty lines
-            line = line.split(", ")
-            if len(line) != 15 or "?" in line: # if a line has missing attributes, ignore it
-                continue
-
-            class_label = line[-1]
-            if class_label in ["<=50K.", "<=50K"]:
-                class_label = -1
-            elif class_label in [">50K.", ">50K"]:
-                class_label = +1
-            else:
-                raise Exception("Invalid class label value")
-
-            y.append(class_label)
+#     # adult data comes in two different files, one for training and one for testing, however, we will combine data from both the files
+#     data_files = ["../data/adult.data", "../data/adult.test"]
 
 
-            for i in range(0,len(line)-1):
-                attr_name = attrs[i]
-                attr_val = line[i]
-                # reducing dimensionality of some very sparse features
-                if attr_name == "native_country":
-                    if attr_val!="United-States":
-                        attr_val = "Non-United-Stated"
-                #elif attr_name == "race":
-                #    if attr_val!="White":
-                #        attr_val = "Non-White"
-                elif attr_name == "education":
-                    if attr_val in ["Preschool", "1st-4th", "5th-6th", "7th-8th"]:
-                        attr_val = "prim-middle-school"
-                    elif attr_val in ["9th", "10th", "11th", "12th"]:
-                        attr_val = "high-school"
 
-                if attr_name in sensitive_attrs:
-                    x_control[attr_name].append(attr_val)
-                elif attr_name in attrs_to_ignore:
-                    pass
-                else:
-                    attrs_to_vals[attr_name].append(attr_val)
+#     X = []
+#     y = []
+#     x_control = {}
 
-    def convert_attrs_to_ints(d): # discretize the string attributes
-        for attr_name, attr_vals in d.items():
-            if attr_name in int_attrs: continue
-            uniq_vals = sorted(list(set(attr_vals))) # get unique values
+#     attrs_to_vals = {} # will store the values for each attribute for all users
+#     for k in attrs:
+#         if k in sensitive_attrs:
+#             x_control[k] = []
+#         elif k in attrs_to_ignore:
+#             pass
+#         else:
+#             attrs_to_vals[k] = []
 
-            # compute integer codes for the unique values
-            val_dict = {}
-            for i in range(0,len(uniq_vals)):
-                val_dict[uniq_vals[i]] = i
+#     for f in data_files:
+# #         check_data_file(f)
 
-            # replace the values with their integer encoding
-            for i in range(0,len(attr_vals)):
-                attr_vals[i] = val_dict[attr_vals[i]]
-            d[attr_name] = attr_vals
+#         for line in open(f):
+#             line = line.strip()
+#             if line == "": continue # skip empty lines
+#             line = line.split(", ")
+#             if len(line) != 15 or "?" in line: # if a line has missing attributes, ignore it
+#                 continue
+
+#             class_label = line[-1]
+#             if class_label in ["<=50K.", "<=50K"]:
+#                 class_label = -1
+#             elif class_label in [">50K.", ">50K"]:
+#                 class_label = +1
+#             else:
+#                 raise Exception("Invalid class label value")
+
+#             y.append(class_label)
+
+
+#             for i in range(0,len(line)-1):
+#                 attr_name = attrs[i]
+#                 attr_val = line[i]
+#                 # reducing dimensionality of some very sparse features
+#                 if attr_name == "native_country":
+#                     if attr_val!="United-States":
+#                         attr_val = "Non-United-Stated"
+#                 #elif attr_name == "race":
+#                 #    if attr_val!="White":
+#                 #        attr_val = "Non-White"
+#                 elif attr_name == "education":
+#                     if attr_val in ["Preschool", "1st-4th", "5th-6th", "7th-8th"]:
+#                         attr_val = "prim-middle-school"
+#                     elif attr_val in ["9th", "10th", "11th", "12th"]:
+#                         attr_val = "high-school"
+
+#                 if attr_name in sensitive_attrs:
+#                     x_control[attr_name].append(attr_val)
+#                 elif attr_name in attrs_to_ignore:
+#                     pass
+#                 else:
+#                     attrs_to_vals[attr_name].append(attr_val)
+
+#     def convert_attrs_to_ints(d): # discretize the string attributes
+#         for attr_name, attr_vals in d.items():
+#             if attr_name in int_attrs: continue
+#             uniq_vals = sorted(list(set(attr_vals))) # get unique values
+
+#             # compute integer codes for the unique values
+#             val_dict = {}
+#             for i in range(0,len(uniq_vals)):
+#                 val_dict[uniq_vals[i]] = i
+
+#             # replace the values with their integer encoding
+#             for i in range(0,len(attr_vals)):
+#                 attr_vals[i] = val_dict[attr_vals[i]]
+#             d[attr_name] = attr_vals
 
     
-    # convert the discrete values to their integer representations
-    convert_attrs_to_ints(x_control)
-    convert_attrs_to_ints(attrs_to_vals)
+#     # convert the discrete values to their integer representations
+#     convert_attrs_to_ints(x_control)
+#     convert_attrs_to_ints(attrs_to_vals)
 
 
-    # if the integer vals are not binary, we need to get one-hot encoding for them
-    for attr_name in attrs_for_classification:
-        attr_vals = attrs_to_vals[attr_name]
-        if attr_name in int_attrs or attr_name == "native_country": # the way we encoded native country, its binary now so no need to apply one hot encoding on it
-            X.append(attr_vals)
+#     # if the integer vals are not binary, we need to get one-hot encoding for them
+#     for attr_name in attrs_for_classification:
+#         attr_vals = attrs_to_vals[attr_name]
+#         if attr_name in int_attrs or attr_name == "native_country": # the way we encoded native country, its binary now so no need to apply one hot encoding on it
+#             X.append(attr_vals)
 
-        else:            
-            attr_vals, index_dict = get_one_hot_encoding(attr_vals)
-            for inner_col in attr_vals.T:                
-                X.append(inner_col) 
+#         else:            
+#             attr_vals, index_dict = get_one_hot_encoding(attr_vals)
+#             for inner_col in attr_vals.T:                
+#                 X.append(inner_col) 
 
 
-    # convert to numpy arrays for easy handline
-    X = np.array(X, dtype=float).T
-    y = np.array(y, dtype = float)
-    for k, v in x_control.items(): x_control[k] = np.array(v, dtype=float)
+#     # convert to numpy arrays for easy handline
+#     X = np.array(X, dtype=float).T
+#     y = np.array(y, dtype = float)
+#     for k, v in x_control.items(): x_control[k] = np.array(v, dtype=float)
         
-    # shuffle the data
-    perm = list(range(0,len(y))) # shuffle the data before creating each fold
-    shuffle(perm)
-    X = X[perm]
-    y = y[perm]
-    for k in x_control.keys():
-        x_control[k] = x_control[k][perm]
+#     # shuffle the data
+#     perm = list(range(0,len(y))) # shuffle the data before creating each fold
+#     shuffle(perm)
+#     X = X[perm]
+#     y = y[perm]
+#     for k in x_control.keys():
+#         x_control[k] = x_control[k][perm]
 
-    # see if we need to subsample the data
-    if load_data_size is not None:
-        print ("Loading only %d examples from the data" % load_data_size)
-        X = X[:load_data_size]
-        y = y[:load_data_size]
-        for k in x_control.keys():
-            x_control[k] = x_control[k][:load_data_size]
-    print(x_control)
-    if not svm:
-        y = np.array((y+1)/2,dtype=np.uint32)
-        print("for others min: ",min(y), "and max: ",max(y))
-    else:
-        print("for svm min: ",min(y), "and max: ",max(y))
-    n = X.shape[0]
+#     # see if we need to subsample the data
+#     if load_data_size is not None:
+#         print ("Loading only %d examples from the data" % load_data_size)
+#         X = X[:load_data_size]
+#         y = y[:load_data_size]
+#         for k in x_control.keys():
+#             x_control[k] = x_control[k][:load_data_size]
 #     print(x_control)
-    print(n)
-    Z = np.zeros((n,len(x_control.keys())))
-    for i,k in enumerate(x_control.keys()):
-        Z[:,i] = x_control[k]
-    print(Z.shape)
-    tr_idx, te_idx = _get_train_test_split(n, train_frac, random_state)
-    Xtr, Xte, ytr, yte, Ztr, Zte = _apply_train_test_split(X, y, Z,
-                                                           tr_idx, te_idx)
+#     if not svm:
+#         y = np.array((y+1)/2,dtype=np.uint32)
+#         print("for others min: ",min(y), "and max: ",max(y))
+#     else:
+#         print("for svm min: ",min(y), "and max: ",max(y))
+#     n = X.shape[0]
+# #     print(x_control)
+#     print(n)
+#     Z = np.zeros((n,len(x_control.keys())))
+#     for i,k in enumerate(x_control.keys()):
+#         Z[:,i] = x_control[k]
+#     print(Z.shape)
+#     tr_idx, te_idx = _get_train_test_split(n, train_frac, random_state)
+#     Xtr, Xte, ytr, yte, Ztr, Zte = _apply_train_test_split(X, y, Z,
+#                                                            tr_idx, te_idx)
     
-    # Whiten feature data
-#     Xtr, Xte = _whiten_data(Xtr, Xte)
-    mm = MinMaxScaler()
-    Xtr = mm.fit_transform(Xtr)
-    Xte = mm.transform(Xte)
+#     # Whiten feature data
+# #     Xtr, Xte = _whiten_data(Xtr, Xte)
+#     mm = MinMaxScaler()
+#     Xtr = mm.fit_transform(Xtr)
+#     Xte = mm.transform(Xte)
 
 #     # Center sensitive data
 #     Ztr, Zte = _center_data(Ztr, Zte)
 
-    # Add intercept
-    if intercept:
-        Xtr, Xte = _add_intercept(Xtr, Xte)
+#     # Add intercept
+#     if intercept:
+#         Xtr, Xte = _add_intercept(Xtr, Xte)
     
         
 
-    return Xtr, Xte, ytr, yte, Ztr, Zte
+#     return Xtr, Xte, ytr, yte, Ztr, Zte
 
-def load_compas_data(COMPAS_INPUT_FILE = "../data/compas.csv", svm = False,random_state=42, intercept = False):
+# def load_compas_data(COMPAS_INPUT_FILE = "../data/compas.csv", svm = False,random_state=42, intercept = False):
 
-    FEATURES_CLASSIFICATION = ["age_cat", "race", "sex", "priors_count", "c_charge_degree"] #features to be used for classification
-    CONT_VARIABLES = ["priors_count"] # continuous features, will need to be handled separately from categorical features, categorical features will be encoded using one-hot
-    CLASS_FEATURE = "two_year_recid" # the decision variable
-#     SENSITIVE_ATTRS = ["race", "sex"]
-    SENSITIVE_ATTRS = ["sex"]
-
-
-    # load the data and get some stats
-    df = pd.read_csv(COMPAS_INPUT_FILE)
-    df = df.dropna(subset=["days_b_screening_arrest"]) # dropping missing vals
-
-    # convert to np array
-    data = df.to_dict('list')
-    for k in data.keys():
-        data[k] = np.array(data[k])
+#     FEATURES_CLASSIFICATION = ["age_cat", "race", "sex", "priors_count", "c_charge_degree"] #features to be used for classification
+#     CONT_VARIABLES = ["priors_count"] # continuous features, will need to be handled separately from categorical features, categorical features will be encoded using one-hot
+#     CLASS_FEATURE = "two_year_recid" # the decision variable
+# #     SENSITIVE_ATTRS = ["race", "sex"]
+#     SENSITIVE_ATTRS = ["sex"]
 
 
-    """ Filtering the data """
+#     # load the data and get some stats
+#     df = pd.read_csv(COMPAS_INPUT_FILE)
+#     df = df.dropna(subset=["days_b_screening_arrest"]) # dropping missing vals
 
-    # These filters are the same as propublica (refer to https://github.com/propublica/compas-analysis)
-    # If the charge date of a defendants Compas scored crime was not within 30 days from when the person was arrested, we assume that because of data quality reasons, that we do not have the right offense. 
-    idx = np.logical_and(data["days_b_screening_arrest"]<=30, data["days_b_screening_arrest"]>=-30)
-
-
-    # We coded the recidivist flag -- is_recid -- to be -1 if we could not find a compas case at all.
-    idx = np.logical_and(idx, data["is_recid"] != -1)
-
-    # In a similar vein, ordinary traffic offenses -- those with a c_charge_degree of 'O' -- will not result in Jail time are removed (only two of them).
-    idx = np.logical_and(idx, data["c_charge_degree"] != "O") # F: felony, M: misconduct
-
-    # We filtered the underlying data from Broward county to include only those rows representing people who had either recidivated in two years, or had at least two years outside of a correctional facility.
-    idx = np.logical_and(idx, data["score_text"] != "NA")
-
-    # we will only consider blacks and whites for this analysis
-    idx = np.logical_and(idx, np.logical_or(data["race"] == "African-American", data["race"] == "Caucasian"))
-
-    # select the examples that satisfy this criteria
-    for k in data.keys():
-        data[k] = data[k][idx]
+#     # convert to np array
+#     data = df.to_dict('list')
+#     for k in data.keys():
+#         data[k] = np.array(data[k])
 
 
+#     """ Filtering the data """
 
-    """ Feature normalization and one hot encoding """
+#     # These filters are the same as propublica (refer to https://github.com/propublica/compas-analysis)
+#     # If the charge date of a defendants Compas scored crime was not within 30 days from when the person was arrested, we assume that because of data quality reasons, that we do not have the right offense. 
+#     idx = np.logical_and(data["days_b_screening_arrest"]<=30, data["days_b_screening_arrest"]>=-30)
 
-    # convert class label 0 to -1
-    y = data[CLASS_FEATURE]
-    if svm:
-        y[y==0] = -1
+
+#     # We coded the recidivist flag -- is_recid -- to be -1 if we could not find a compas case at all.
+#     idx = np.logical_and(idx, data["is_recid"] != -1)
+
+#     # In a similar vein, ordinary traffic offenses -- those with a c_charge_degree of 'O' -- will not result in Jail time are removed (only two of them).
+#     idx = np.logical_and(idx, data["c_charge_degree"] != "O") # F: felony, M: misconduct
+
+#     # We filtered the underlying data from Broward county to include only those rows representing people who had either recidivated in two years, or had at least two years outside of a correctional facility.
+#     idx = np.logical_and(idx, data["score_text"] != "NA")
+
+#     # we will only consider blacks and whites for this analysis
+#     idx = np.logical_and(idx, np.logical_or(data["race"] == "African-American", data["race"] == "Caucasian"))
+
+#     # select the examples that satisfy this criteria
+#     for k in data.keys():
+#         data[k] = data[k][idx]
 
 
 
-    print ("\nNumber of people recidivating within two years")
-    print (pd.Series(y).value_counts())
-    print ("\n")
+#     """ Feature normalization and one hot encoding """
+
+#     # convert class label 0 to -1
+#     y = data[CLASS_FEATURE]
+#     if svm:
+#         y[y==0] = -1
 
 
-    X = np.array([]).reshape(len(y), 0) # empty array with num rows same as num examples, will hstack the features to it
-    x_control = defaultdict(list)
 
-    feature_names = []
-    for attr in FEATURES_CLASSIFICATION:
-        vals = data[attr]
-        if attr in CONT_VARIABLES:
-            vals = [float(v) for v in vals]
-            vals = preprocessing.scale(vals) # 0 mean and 1 variance  
-            vals = np.reshape(vals, (len(y), -1)) # convert from 1-d arr to a 2-d arr with one col
-
-        else: # for binary categorical variables, the label binarizer uses just one var instead of two
-            lb = preprocessing.LabelBinarizer()
-            lb.fit(vals)
-            vals = lb.transform(vals)
-
-        # add to sensitive features dict
-        if attr in SENSITIVE_ATTRS:
-            x_control[attr] = vals
+#     print ("\nNumber of people recidivating within two years")
+#     print (pd.Series(y).value_counts())
+#     print ("\n")
 
 
-        # add to learnable features
-        X = np.hstack((X, vals))
+#     X = np.array([]).reshape(len(y), 0) # empty array with num rows same as num examples, will hstack the features to it
+#     x_control = defaultdict(list)
 
-        if attr in CONT_VARIABLES: # continuous feature, just append the name
-            feature_names.append(attr)
-        else: # categorical features
-            if vals.shape[1] == 1: # binary features that passed through lib binarizer
-                feature_names.append(attr)
-            else:
-                for k in lb.classes_: # non-binary categorical features, need to add the names for each cat
-                    feature_names.append(attr + "_" + str(k))
+#     feature_names = []
+#     for attr in FEATURES_CLASSIFICATION:
+#         vals = data[attr]
+#         if attr in CONT_VARIABLES:
+#             vals = [float(v) for v in vals]
+#             vals = preprocessing.scale(vals) # 0 mean and 1 variance  
+#             vals = np.reshape(vals, (len(y), -1)) # convert from 1-d arr to a 2-d arr with one col
+
+#         else: # for binary categorical variables, the label binarizer uses just one var instead of two
+#             lb = preprocessing.LabelBinarizer()
+#             lb.fit(vals)
+#             vals = lb.transform(vals)
+
+#         # add to sensitive features dict
+#         if attr in SENSITIVE_ATTRS:
+#             x_control[attr] = vals
 
 
-    # convert the sensitive feature to 1-d array
-    x_control = dict(x_control)
-    for k in x_control.keys():
-        assert(x_control[k].shape[1] == 1) # make sure that the sensitive feature is binary after one hot encoding
-        x_control[k] = np.array(x_control[k]).flatten()
+#         # add to learnable features
+#         X = np.hstack((X, vals))
 
-    # sys.exit(1)
+#         if attr in CONT_VARIABLES: # continuous feature, just append the name
+#             feature_names.append(attr)
+#         else: # categorical features
+#             if vals.shape[1] == 1: # binary features that passed through lib binarizer
+#                 feature_names.append(attr)
+#             else:
+#                 for k in lb.classes_: # non-binary categorical features, need to add the names for each cat
+#                     feature_names.append(attr + "_" + str(k))
 
-    """permute the date randomly"""
-    perm = list(range(0,X.shape[0]))
-    shuffle(perm)
-    X = X[perm]
-    y = y[perm]
-    for k in x_control.keys():
-        x_control[k] = x_control[k][perm]
+
+#     # convert the sensitive feature to 1-d array
+#     x_control = dict(x_control)
+#     for k in x_control.keys():
+#         assert(x_control[k].shape[1] == 1) # make sure that the sensitive feature is binary after one hot encoding
+#         x_control[k] = np.array(x_control[k]).flatten()
+
+#     # sys.exit(1)
+
+#     """permute the date randomly"""
+#     perm = list(range(0,X.shape[0]))
+#     shuffle(perm)
+#     X = X[perm]
+#     y = y[perm]
+#     for k in x_control.keys():
+#         x_control[k] = x_control[k][perm]
     
-    n = X.shape[0]
-    Z = np.expand_dims(x_control[k],axis=-1)
-    tr_idx, te_idx = _get_train_test_split(n, train_frac, random_state)
-    Xtr, Xte, ytr, yte, Ztr, Zte = _apply_train_test_split(X, y, Z,
-                                                           tr_idx, te_idx)
+#     n = X.shape[0]
+#     Z = np.expand_dims(x_control[k],axis=-1)
+#     tr_idx, te_idx = _get_train_test_split(n, train_frac, random_state)
+#     Xtr, Xte, ytr, yte, Ztr, Zte = _apply_train_test_split(X, y, Z,
+#                                                            tr_idx, te_idx)
     
-    # Whiten feature data
-#     Xtr, Xte = _whiten_data(Xtr, Xte)
-    mm = MinMaxScaler()
-    Xtr = mm.fit_transform(Xtr)
-    Xte = mm.transform(Xte)
+#     # Whiten feature data
+# #     Xtr, Xte = _whiten_data(Xtr, Xte)
+#     mm = MinMaxScaler()
+#     Xtr = mm.fit_transform(Xtr)
+#     Xte = mm.transform(Xte)
 
-#     # Center sensitive data
-#     Ztr, Zte = _center_data(Ztr, Zte)
+# #     # Center sensitive data
+# #     Ztr, Zte = _center_data(Ztr, Zte)
 
-    # Add intercept
-    if intercept:
-        Xtr, Xte = _add_intercept(Xtr, Xte)
+#     # Add intercept
+#     if intercept:
+#         Xtr, Xte = _add_intercept(Xtr, Xte)
     
         
 
-    return Xtr, Xte, ytr, yte, Ztr, Zte
+#     return Xtr, Xte, ytr, yte, Ztr, Zte
 
 # def load_bank_data(load_data_size=None):
 

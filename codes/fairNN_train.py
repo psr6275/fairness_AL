@@ -6,7 +6,7 @@ from livelossplot import PlotLosses
 
 
 from eval_utils import *
-from fairAL_utils import divide_groupsDL, cal_meangrad, select_examples, select_random
+from fairAL_utils import divide_groupsDL, cal_meangrad, select_examples, select_random,select_entexamples
 from load_data import obtain_newDS,train_valid_split
 
 class Args:
@@ -24,7 +24,7 @@ class Args:
         print("AL selection is based on ", self.AL_select)
 
 def train_AL(train_loader, select_loader, device, args = None, test_loader = None,clf_type='NN',\
-             from_scratch = True, random_sel = False):
+             from_scratch = True, sel_method = 'random'):
     if args is None:
         args = Args()
 
@@ -52,12 +52,16 @@ def train_AL(train_loader, select_loader, device, args = None, test_loader = Non
         train_model(clf, train_loader, clf_criterion, clf_optimizer, device, args.epochs, test_loader, liveloss)
         
         if it <args.AL_iters-1:
-            if random_sel:
+            if sel_method == 'random':
                 ses,sidx = select_random(clf, select_loader,device, args.AL_batch)
+            elif sel_method == 'entropy':
+                sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
+                grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
+                ses,sidx = select_entexamples(clf, select_loader, grads,device, args)
             else:
                 sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
                 grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
-                ses,sidx = select_examples(clf, select_loader, clf_criterion, grads,device, args.AL_batch)
+                ses,sidx = select_examples(clf, select_loader, clf_criterion, grads,device, args)
             
             
 #             print(ses)
@@ -69,7 +73,7 @@ def train_AL(train_loader, select_loader, device, args = None, test_loader = Non
     return clf, train_loader, select_loader    
 
 def train_AL_valid(train_loader, select_loader, device, args = None, test_loader = None, clf_type='NN', from_scratch = True,\
-                   random_sel = False,val_ratio = 0.2):
+                   sel_method = 'random',val_ratio = 0.2):
     if args is None:
         args = Args()
 
@@ -100,14 +104,17 @@ def train_AL_valid(train_loader, select_loader, device, args = None, test_loader
         train_model(clf, tr_loader, clf_criterion, clf_optimizer, device, args.epochs, test_loader, liveloss)
 
         if it <args.AL_iters-1:
-            if random_sel:
+            if sel_method =='random':
                 ses,sidx = select_random(clf, select_loader,device, args.AL_batch)
+            elif sel_method == 'entropy':
+                sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
+                grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
+                ses,sidx = select_entexamples(clf, select_loader, grads,device, args)
             else:
                 sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
                 grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
-                ses,sidx = select_examples(clf, select_loader, clf_criterion, grads,device, args.AL_batch)
-            
-            
+                ses,sidx = select_examples(clf, select_loader, clf_criterion, grads,device, args)
+
 #             print(ses)
             train_loader, select_loader = obtain_newDS(train_loader, select_loader, ses, sidx, args.batch_size)
 #         print(train_loader.dataset.tensors[0].shape)
@@ -138,9 +145,10 @@ def train_model(model, train_loader, criterion, optimizer, device, epochs, test_
             loss = criterion(p_y, y)
             loss.backward()
             optimizer.step()
-            acc = accuracy_b(p_y,y)
+            acc = accuracy_b(p_y.detach().cpu(),y.detach().cpu())
 #             acc = accuracy_b(p_y,y)
-            print(loss)
+#             print(loss)
+#             print(losses.avg)
             losses.update(loss,x.size(0))
             accs.update(acc,x.size(0))
 #             if batch_idx % args.log_interval ==0:
@@ -149,6 +157,8 @@ def train_model(model, train_loader, criterion, optimizer, device, epochs, test_
 #                         100. * batch_idx / len(train_loader), loss.item())
 #                 print(message)
 #         print(losses)
+#         print(losses.avg)
+#         print(losses.sum)
         logs['loss'] = losses.avg.detach().cpu()
         logs['acc'] = accs.avg.detach().cpu()
         if test_loader is not None:
@@ -167,7 +177,7 @@ def test_model(model, test_loader, criterion, device):
         p_y = model(x)
         loss = criterion(p_y,y)
         
-        acc = accuracy_b(p_y, y)
+        acc = accuracy_b(p_y.detach().cpu(), y.detach().cpu())
 #         acc = accuracy_b(p_y, y)
         losses.update(loss,x.size(0))
         accs.update(acc,x.size(0))
@@ -183,7 +193,7 @@ def test_model_noz(model, test_loader, criterion, device):
         y = y.to(device)
         p_y = model(x)
         loss = criterion(p_y,y)
-        acc = accuracy_b(p_y, y)
+        acc = accuracy_b(p_y.detach().cpu(), y.detach().cpu())
 #         acc = accuracy_b(p_y, y)
         losses.update(loss,x.size(0))
         accs.update(acc,x.size(0))
@@ -244,6 +254,7 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         return torch.sigmoid(self.network(x))
+
 
 class Adversary(nn.Module):
 
