@@ -13,7 +13,14 @@ class SmoothCrossEntropy(nn.Module):
         logprobs = torch.nn.functional.log_softmax (output, dim = 1)
         return  -(target * logprobs).sum() / output.shape[0]
 
-
+class BinaryEntropy(nn.Module):
+    def __init__(self):
+        super(BinaryEntropy,self).__init__()
+    def forward(self,output,logit):
+        max_val = (-logit).clamp_min_(0)
+        loss = (1-output)*logit +max_val+ torch.log(torch.exp(-max_val)+torch.exp(-logit-max_val))
+        return loss.mean()
+    
 def select_examples(clf,select_loader,criterion, grad_z, device, args):
     aa = torch.topk(compute_gradsim(clf, select_loader, criterion, grad_z, device, args),args.AL_batch)
     ses = []
@@ -22,6 +29,12 @@ def select_examples(clf,select_loader,criterion, grad_z, device, args):
     return ses,aa[1]
 def select_entexamples(clf,select_loader, grad_z, device, args):
     aa = torch.topk(compute_entropysim(clf, select_loader, grad_z, device, args),args.AL_batch)
+    ses = []
+    for ts in select_loader.dataset.tensors:
+        ses.append(ts[aa[1]])
+    return ses,aa[1]
+def select_binary_entexamples(clf,select_loader, grad_z, device, args):
+    aa = torch.topk(compute_gradsim_binary(clf, select_loader, grad_z, device, args),args.AL_batch)
     ses = []
     for ts in select_loader.dataset.tensors:
         ses.append(ts[aa[1]])
@@ -129,20 +142,23 @@ def compute_gradsim(clf, select_loader, criterion, grad_z,device,args):
 #         print(grad_z)
         sims.append(torch.matmul(grad_t,grad_z.to(device)))
     return torch.cat(sims).detach().cpu()
-def compute_gradsim_binary(clf, select_loader, criterion, grad_z,device,args):
+
+def compute_gradsim_binary(clf, select_loader, grad_z,device,args):
     clf.eval()
     autograd_hacks.add_hooks(clf)
     sims = []
     assert args.num_classes ==2
+    criterion = BinaryEntropy()
     for i, (x,_,_) in enumerate(select_loader):
         x = x.to(device)
 #         y = torch.ones(x.size(0),1).to(device)*j
         clf.zero_grad()
         clear_backprops(clf)
         outs = clf(x)
-        outs_ = torch.new_tensor(outs,requires_grad = False)
+        logit = clf.network(x)
+#         outs_ = torch.new_tensor(outs,requires_grad = False)
         count_backprops(clf)
-        criterion(outs,outs_).backward()
+        criterion(outs,logit).backward()
         remove_backprops(clf)
         autograd_hacks.compute_grad1(clf)
         tmp = []
