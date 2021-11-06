@@ -7,15 +7,30 @@ from load_data import *
 import random
 
 class SmoothCrossEntropy(nn.Module):
-    def __init__(self):
+    def __init__(self,reduce=True):
         super(SmoothCrossEntropy,self).__init__()
+        self.reduce = reduce
     def forward(self,output, target):
         logprobs = torch.nn.functional.log_softmax (output, dim = 1)
-        return  -(target * logprobs).sum() / output.shape[0]
+        if self.reduce:
+            return  -(target * logprobs).sum() / output.shape[0]
+        else:
+            return  -(target * logprobs)
 
 class BinaryEntropy(nn.Module):
-    def __init__(self):
+    def __init__(self,reduce=True):
         super(BinaryEntropy,self).__init__()
+        self.reduce = reduce
+    def forward(self,output):
+        loss = -output*torch.log(output)  - (1-output)*torch.log(1-output)
+        if self.reduce:
+            return loss.mean()
+        else:
+            return loss
+    
+class BinaryEntropy_stable(nn.Module):
+    def __init__(self):
+        super(BinaryEntropy_stable,self).__init__()
     def forward(self,output,logit):
         max_val = (-logit).clamp_min_(0)
         loss = (1-output)*logit +max_val+ torch.log(torch.exp(-max_val)+torch.exp(-logit-max_val))
@@ -35,6 +50,13 @@ def select_entexamples(clf,select_loader, grad_z, device, args):
     return ses,aa[1]
 def select_binary_entexamples(clf,select_loader, grad_z, device, args):
     aa = torch.topk(compute_gradsim_binary(clf, select_loader, grad_z, device, args),args.AL_batch)
+    ses = []
+    for ts in select_loader.dataset.tensors:
+        ses.append(ts[aa[1]])
+    return ses,aa[1]
+def select_clf_entropy_examples(clf,select_loader, device, args):
+#     print(compute_clf_entropy(clf,select_loader,device,args).shape,args.AL_batch)
+    aa = torch.topk(compute_clf_entropy(clf,select_loader,device,args),args.AL_batch)
     ses = []
     for ts in select_loader.dataset.tensors:
         ses.append(ts[aa[1]])
@@ -143,6 +165,25 @@ def compute_gradsim(clf, select_loader, criterion, grad_z,device,args):
         sims.append(torch.matmul(grad_t,grad_z.to(device)))
     return torch.cat(sims).detach().cpu()
 
+def compute_clf_entropy(clf,select_loader,device,args):
+    if args.num_classes ==2:
+        criterion = BinaryEntropy(reduce=False)
+    else:
+        crietrion = SmoothCrossEntropy(reduce=False)
+    clf.eval()
+    losses = []
+    for i,(x,_,_) in enumerate(select_loader):
+        x = x.to(device)
+        outs = clf(x)
+        if args.num_classes ==2:
+            loss = criterion(outs)
+        else:
+            loss = criterion(outs,outs)
+        losses.append(loss)
+        
+#     print(torch.cat(losses).detach().cpu().size())
+    return torch.cat(losses).detach().cpu().flatten()
+
 def compute_gradsim_binary(clf, select_loader, grad_z,device,args):
     clf.eval()
     autograd_hacks.add_hooks(clf)
@@ -155,10 +196,11 @@ def compute_gradsim_binary(clf, select_loader, grad_z,device,args):
         clf.zero_grad()
         clear_backprops(clf)
         outs = clf(x)
-        logit = clf.network(x)
+#         logit = clf.network(x)
 #         outs_ = torch.new_tensor(outs,requires_grad = False)
         count_backprops(clf)
-        criterion(outs,logit).backward()
+        criterion(outs).backward()
+#         criterion(outs,logit).backward()
         remove_backprops(clf)
         autograd_hacks.compute_grad1(clf)
         tmp = []

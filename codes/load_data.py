@@ -40,6 +40,22 @@ def obtain_newDS(train_loader, select_loader,ses, sidx, batch_size = 32):
     
     return tr_loader, se_loader
 
+def split_initial_dataset(Xtr,ytr,Ztr,N_init=300,random_state=42):
+    np.random.seed(random_state)
+    n_examples = Xtr.shape[0]
+    idx = np.random.permutation(n_examples)
+    
+    init_idx = idx[:N_init]
+    AL_idx = idx[N_init:]
+    
+    Xinit = Xtr[init_idx]
+    yinit = ytr[init_idx]
+    Zinit = Ztr[init_idx]
+    XAL = Xtr[AL_idx]
+    yAL = ytr[AL_idx]
+    ZAL = Ztr[AL_idx]
+    return Xinit, yinit, Zinit, XAL, yAL, ZAL
+
 class NPsDataSet(TensorDataset):
 
     def __init__(self, *dataarrays):

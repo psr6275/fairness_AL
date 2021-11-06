@@ -6,7 +6,7 @@ from livelossplot import PlotLosses
 
 
 from eval_utils import *
-from fairAL_utils import divide_groupsDL, cal_meangrad, select_examples, select_random,select_entexamples
+from fairAL_utils import divide_groupsDL, cal_meangrad, select_examples, select_random,select_entexamples,select_binary_entexamples, select_clf_entropy_examples
 from load_data import obtain_newDS,train_valid_split
 
 class Args:
@@ -58,6 +58,12 @@ def train_AL(train_loader, select_loader, device, args = None, test_loader = Non
                 sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
                 grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
                 ses,sidx = select_entexamples(clf, select_loader, grads,device, args)
+            elif sel_method == 'binary_entropy':
+                sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
+                grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
+                ses,sidx = select_binary_entexamples(clf, select_loader, grads,device, args)
+            elif sel_method == 'clf_entropy':
+                ses,sidx = select_clf_entropy_examples(clf, select_loader, device, args)
             else:
                 sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
                 grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
@@ -110,6 +116,12 @@ def train_AL_valid(train_loader, select_loader, device, args = None, test_loader
                 sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
                 grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
                 ses,sidx = select_entexamples(clf, select_loader, grads,device, args)
+            elif sel_method == 'binary_entropy':
+                sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
+                grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
+                ses,sidx = select_binary_entexamples(clf, select_loader, grads,device, args)
+            elif sel_method == 'clf_entropy':
+                ses,sidx = select_clf_entropy_examples(clf, select_loader, device, args)
             else:
                 sid, dldic = test_groupwise(clf, train_loader, clf_criterion, device, args)
                 grads = cal_meangrad(clf, dldic[sid], clf_criterion, device)
