@@ -122,6 +122,17 @@ def clear_backprops(model: nn.Module) -> None:
         if hasattr(layer, 'backprops_list'):
             del layer.backprops_list
 
+def remove_backprops(model: nn.Module):
+    """Delete layer.backprops_list in every layer."""
+    for layer in model.modules():
+        if hasattr(layer, 'backprops_list'):
+            del layer.backprops_list[:-1]
+
+def count_backprops(model: nn.Module) -> None:
+    """Delete layer.backprops_list in every layer."""
+    for layer in model.modules():
+        if hasattr(layer, 'backprops_list'):
+            print(len(layer.backprops_list))
 
 def compute_grad1(model: nn.Module, loss_type: str = 'mean') -> None:
     """
