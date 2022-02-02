@@ -1,6 +1,5 @@
 import numpy as np
-from fair_eval import *
-from load_data import *
+from .load_data import *
 
 def calculate_misclassification(pred, y, xs):
     y = y.flatten()

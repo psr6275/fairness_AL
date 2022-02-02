@@ -13,20 +13,91 @@ from sklearn import preprocessing
 from random import seed, shuffle
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
-
-import numpy as np
-
-train_frac = 0.7
-# random_state=42
-# sc = StandardScaler()
-# mm = MinMaxScaler()
+import matplotlib.pyplot as plt
 
 import torch
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
 import random
 
-from fair_eval import *
+import numpy as np
+
+train_frac = 0.7
+
+def dl2nparray(dataloader):
+    arrs = []
+    for ts in dataloader.dataset.tensors:
+        arrs.append(ts.detach().cpu().numpy()) 
+    return tuple(arrs)
+
+def dataset_description(X,y,z,dataname='train'): 
+
+    if len(y.shape)==2:
+        y = y.flatten()
+    if len(z.shape) ==2:
+        z = _transform_dum2cat(z)
+        z = z.flatten()
+        lenz = len(np.unique(z))
+    else:
+        lenz = 2
+    
+    mrat_y = compute_max_ratio(y)
+    mrat_z = compute_max_ratio(z)
+    
+    fig, (ax1,ax2,ax3) = plt.subplots(1,3,sharey=True,figsize=(10,3))
+    fig.subplots_adjust(top=0.8)
+    fig.suptitle(dataname+" input data shape: "+str(X.shape))
+    ax1.set_title("max label %.2f" % mrat_y)
+    ax1.hist(y)
+    ax2.set_title("max group %.2f" % mrat_z)
+    ax2.hist(z)
+    ax3.set_title("label* %d +group " % lenz )
+    ax3.hist(lenz*y+z)
+    plt.show()
+
+def compute_max_ratio(arr):    
+    arr = arr.flatten()
+    arr_u = np.unique(arr)
+    max_rat = 0.0
+    arr_n = len(arr)
+    for au in arr_u:
+        rat = sum(arr==au)/arr_n
+        if rat>max_rat:
+            max_rat = rat
+    return max_rat
+    
+def input_uniqueness(X1,X2):
+    Xt = np.row_stack([X1,X2])
+    n1 = Xt.shape[0]
+    n2 = np.unique(Xt,axis=0).shape[0]
+    print(n1, n2)
+    if n1==n2:
+        print("satisfy uniqueness")
+    else:
+        print("redundant examples: ", str(n1-n2))
+        
+def initial_dataloaders(Xtr,ytr,Ztr,Xte,yte,Zte,N1,args):
+    Xtr1, ytr1, Ztr1, Xtr2, ytr2, Ztr2 = split_initial_dataset(Xtr,ytr,Ztr,N_init=N1,random_state=42)
+    train_data = NPsDataSet(Xtr1, ytr1, Ztr1)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, drop_last=False)
+    zZtr2 = _transform_dum2cat(Ztr2)
+    select_data = NPsDataSet(Xtr2, ytr2, zZtr2)
+    select_loader = DataLoader(select_data, batch_size=args.batch_size, shuffle=False, drop_last=False)
+    test_data = NPsDataSet(Xte, yte, Zte)
+    test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, drop_last=False)
+    return train_loader,select_loader,test_loader
+
+def obtain_newDS_rev(train_loader, select_loader, sidx, batch_size = 32):
+    ds1 = []
+    for i, tss in enumerate(train_loader.dataset.tensors):
+        ds1.append(np.append(tss,select_loader.dataset.tensors[i][sidx],axis = 0))
+    ds2 = []
+    for tss in select_loader.dataset.tensors:
+        ds2.append(np.delete(tss,sidx.detach().cpu(),axis=0))
+    tr_loader = DataLoader(NPsDataSet(ds1[0],ds1[1],ds1[2]),batch_size = batch_size, shuffle=True)
+    se_loader = DataLoader(NPsDataSet(ds2[0],ds2[1],ds2[2]),batch_size = batch_size, shuffle=False)
+    
+    return tr_loader, se_loader
 
 def obtain_newDS(train_loader, select_loader,ses, sidx, batch_size = 32):
     ds1 = []
@@ -39,6 +110,9 @@ def obtain_newDS(train_loader, select_loader,ses, sidx, batch_size = 32):
     se_loader = DataLoader(NPsDataSet(ds2[0],ds2[1],ds2[2]),batch_size = batch_size, shuffle=False)
     
     return tr_loader, se_loader
+
+def make_dataloader(x,y,z, batch_size, shuffle):
+    return DataLoader(NPsDataSet(x,y,z), batch_size = batch_size, shuffle=shuffle)
 
 def split_initial_dataset(Xtr,ytr,Ztr,N_init=300,random_state=42):
     np.random.seed(random_state)
@@ -59,7 +133,7 @@ def split_initial_dataset(Xtr,ytr,Ztr,N_init=300,random_state=42):
 class NPsDataSet(TensorDataset):
 
     def __init__(self, *dataarrays):
-        tensors = (torch.tensor(da).float() for da in dataarrays)
+        tensors = (torch.tensor(da).clone().detach().float() for da in dataarrays)
         super(NPsDataSet, self).__init__(*tensors)
 def train_valid_split(train_loader,train_num,val_ratio = 0.2,random_seed = 7):
     random.seed(random_seed)
@@ -86,8 +160,8 @@ def convert_object_type_to_category(df):
     return df    
     
 def divide_groupsDL(x,y,z, batch_size = 32):
-    zs = transform_dum2cat(z).flatten()
 #     print(zs)
+    zs = z.flatten()
     zsu = np.unique(zs)
     dataloaders = {}
     for zu in zsu:
@@ -103,6 +177,27 @@ def load_singlefold(savepath):
     with open(savepath,'rb') as f:
         Xtr,Xte,ytr,yte,Ztr,Zte = pickle.load(f)
     return Xtr,Xte,ytr,yte,Ztr,Zte
+
+def load_data_with_name(dataname, **data_args):
+    
+    if dataname == 'adult':
+        load_fn = load_adult_data        
+    elif dataname == 'bank':
+        load_fn = load_bank_data
+    elif dataname == 'german':
+        load_fn = load_german_data
+    elif dataname == 'lsac':
+        load_fn = load_lsac_data
+    elif dataname == 'compas':
+        load_fn = load_compas_data
+    else:
+        raise NotImplementedError("need to be implemented for other datasets")
+    
+    Xtr, Xte, ytr, yte, Ztr, Zte = load_fn(**data_args)
+    ytr = ytr.astype('float32').reshape((-1,1))
+    yte = yte.astype('float32').reshape((-1,1))
+    
+    return Xtr, Xte, ytr, yte, Ztr, Zte
 
 def load_adult_data(filepath = '../data/adult_proc.csv',svm=False,random_state=42, intercept=False,sensitive_attrs=None):
     df = pd.read_csv(filepath)
@@ -175,7 +270,8 @@ def load_compas_data(filepath = '../data/compas_proc.csv',svm=False,random_state
     
     return Xtr, Xte, ytr, yte, Ztr, Zte
 
-def load_lsac_data(filepath='../data/lsac_proc.csv',svm=False,random_state=42,intercept=False,sensitive_attrs =None):
+def load_lsac_data(filepath='../data/lsac_proc.csv',svm=False,random_state=42,
+                   intercept=False,sensitive_attrs =None):
 
     """
     race_map = {'Black':1.0,'White':0.0,'Other':2.0}
@@ -1010,6 +1106,26 @@ def get_one_hot_encoding(in_arr):
         out_arr.append(tup)
 
     return (np.array(out_arr), index_dict)
+
+def _transform_dum2cat(xs,nil = None):
+    # xs should start with 0!
+    if len(xs.shape)==1:
+        xs = xs.reshape((-1,1))
+    if type(xs) == torch.Tensor:
+        xs = xs.clone().detach().cpu().numpy()
+    xsv = np.zeros(xs.shape[0])
+    if nil is None:
+#         print(xs[:,0])
+        nil = [len(np.unique(xs[:,i])) for i in range(xs.shape[1])]
+    
+    for i in range(xs.shape[1]):
+        if i>0:
+            ni = np.prod(nil[:i-1])
+        else:
+            ni = 0
+        xsv += xs[:,i]+ni
+    return xsv.reshape((-1,1))
+
 def _add_intercept(train, test):
     """Add a column of all ones for the intercept."""
     return tuple([np.hstack((np.ones((x.shape[0], 1)), x))
