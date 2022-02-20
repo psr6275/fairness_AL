@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import numpy as np
 
 from .grad_utils import obtain_param_names, _is_shuffle, compute_mean_grad_dic, compute_indv_grad_dic
 
@@ -85,7 +86,8 @@ def compute_indv_entropy(clf, dataloader, device,sel_batch_num):
         outs = clf(x)
         loss = criterion(outs)
         losses.append(loss.detach().cpu())
-    max_outs = torch.topk(torch.tensor(losses),sel_batch_num)
+#     print(torch.cat(losses).shape,sel_batch_num)
+    max_outs = torch.topk(torch.cat(losses).flatten(),sel_batch_num)
     return max_outs[1]
 
 def compute_similarity_with_grad_binary(clf,val_loader,sel_loader,device,sel_batch_num,
@@ -121,7 +123,7 @@ def select_examples_binary(clf, val_loader, sel_loader, device, sel_batch_num,
         sel_idxs = compute_similarity_with_grad_binary(clf, val_loader, sel_loader, device, sel_batch_num, 
                                             criterion_type, **sel_args)
     elif criterion_type == 'entropy':
-        sel_idxs = compute_indv_entropy(clf, dataloader, device,sel_batch_num)
+        sel_idxs = compute_indv_entropy(clf, sel_loader, device,sel_batch_num)
     else:
-        sel_idxs = torch.tensor(list(np.range(sel_loader.dataset.tensor[0].shape[0])))
+        sel_idxs = torch.randperm(sel_loader.dataset.tensors[0].shape[0])[:sel_batch_num]
     return sel_idxs

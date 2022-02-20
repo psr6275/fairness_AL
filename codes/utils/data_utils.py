@@ -30,6 +30,11 @@ def dl2nparray(dataloader):
         arrs.append(ts.detach().cpu().numpy()) 
     return tuple(arrs)
 
+def save_dataloader(save_dir, dataloader, filename = "test_loader.pkl"):
+    datafile = os.path.join(save_dir,filename)
+    torch.save(dataloader,datafile)
+    print(filename,"is stored in",datafile)
+
 def dataset_description(X,y,z,dataname='train'): 
 
     if len(y.shape)==2:

@@ -43,17 +43,18 @@ def split_AL_loaders(dataloader, args):
 
 def obtain_AL_ckpts(save_dir):
     state_files = []
+    data_files = []
     for di in os.listdir(save_dir):
         if ".args" in di:
             config_file = di
         elif ".pt" in di:
             state_files.append(di)
         elif ".pkl" in di:
-            data_file = di
+            data_files.append(di)
         else:
             print("unknown file: ",di)
     state_files.sort()
-    return config_file, state_files, data_file
+    return config_file, state_files, data_files
 
 def test_groupwise(clf, data_loader, clf_criterion, device, 
                    AL_select = 'loss', problem_type = 'binary', return_loader = True):
