@@ -30,16 +30,20 @@ def load_test_model(save_dir, state_file, args):
 
 def split_AL_loaders(dataloader, args):
     dl_loaders = []
+    dl_cum_loaders = []
     st_num = args.init_num
     ds = dataloader.dataset.tensors
     dl_loaders.append(make_dataloader(ds[0][:st_num],ds[1][:st_num],ds[2][:st_num],
                                      args.batch_size, False))
+    dl_cum_loaders.append(dl_loaders[0])
     for i in range(args.AL_iters):
         st_num = args.init_num + args.AL_batch*i
         dt_num = args.init_num + args.AL_batch*(i+1)
         dl_loaders.append(make_dataloader(ds[0][st_num:dt_num],ds[1][st_num:dt_num],ds[2][st_num:dt_num],
                                      args.batch_size, False))
-    return dl_loaders
+        dl_cum_loaders.append(make_dataloader(ds[0][:dt_num],ds[1][:dt_num],ds[2][:dt_num],
+                                     args.batch_size, False))
+    return dl_loaders, dl_cum_loaders
 
 def obtain_AL_ckpts(save_dir):
     state_files = []
