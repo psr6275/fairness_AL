@@ -61,10 +61,15 @@ def obtain_AL_ckpts(save_dir):
     return config_file, state_files, data_files
 
 def test_groupwise(clf, data_loader, clf_criterion, device, 
-                   AL_select = 'loss', problem_type = 'binary', return_loader = True):
+                   AL_select = 'loss', problem_type = 'binary', return_loader = True, test_loader = None):
     clf.to(device).eval()
-    dlTensors = data_loader.dataset.tensors
-    dldic = divide_groupsDL(dlTensors[0],dlTensors[1],dlTensors[2])
+    if test_loader is None:
+        dlTensors = data_loader.dataset.tensors
+        dldic = divide_groupsDL(dlTensors[0],dlTensors[1],dlTensors[2])
+    else:
+        dlTensors = test_loader.dataset.tensors
+        dldic = divide_groupsDL(dlTensors[0],dlTensors[1],dlTensors[2])
+    del dlTensors
     losss = 0
     accs = 100.0
     gid = list(dldic.keys())[0]
@@ -88,7 +93,10 @@ def test_groupwise(clf, data_loader, clf_criterion, device,
                 gid = did
                 accs = acc_v
         del loss_v, acc_v, did
-   
+    if test_loader is not None:
+        dlTensors = data_loader.dataset.tensors
+        dldic = divide_groupsDL(dlTensors[0],dlTensors[1],dlTensors[2])
+        del dlTensors
     worst_dl = dldic[gid]
     del dldic
     if return_loader:

@@ -81,8 +81,8 @@ def input_uniqueness(X1,X2):
     else:
         print("redundant examples: ", str(n1-n2))
         
-def initial_dataloaders(Xtr,ytr,Ztr,Xte,yte,Zte,N1,args):
-    Xtr1, ytr1, Ztr1, Xtr2, ytr2, Ztr2 = split_initial_dataset(Xtr,ytr,Ztr,N_init=N1,random_state=42)
+def initial_dataloaders(Xtr,ytr,Ztr,Xte,yte,Zte,N1,args, random_state=42):
+    Xtr1, ytr1, Ztr1, Xtr2, ytr2, Ztr2 = split_initial_dataset(Xtr,ytr,Ztr,N_init=N1,random_state=random_state)
     train_data = NPsDataSet(Xtr1, ytr1, Ztr1)
     train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, drop_last=False)
     zZtr2 = _transform_dum2cat(Ztr2)

@@ -134,6 +134,71 @@ def train_AL_valid(train_loader, select_loader, device, args, test_loader=None,f
     
     return clf, train_loader, select_loader
 
+def train_AL_valid_trgrad(train_loader, select_loader, device, args, test_loader=None,from_scratch=True):
+    
+    n_features = train_loader.dataset.tensors[0].shape[1]
+    
+    if args.problem_type =='binary':
+        construct_model = construct_model_binary
+        clf_criterion = nn.BCELoss()
+        select_examples = select_examples_binary
+        
+    else:
+        raise NotImplementedError("need to be implemented for multi-class classification")
+    
+    if from_scratch ==False:
+        clf = construct_model(args.model_type,n_feautres,**args.model_args)
+            
+    liveloss = PlotLosses()
+    
+    assert((args.AL_iters-1)*args.AL_batch<select_loader.dataset.tensors[0].shape[0])
+    
+    tr_num = train_loader.dataset.tensors[0].size(0)
+    
+    if args.save_model:
+        args.n_features = n_features
+        args_path = os.path.join(args.save_dir, "valid_config.args")
+        torch.save(args,args_path)
+        print("config argument is saved in ", args_path)
+    
+    for it in range(args.AL_iters):
+        if from_scratch:
+            clf = construct_model(args.model_type, n_features, **args.model_args)
+            ## optimizer!
+            clf_optimizer = optim.Adam(clf.parameters())
+            
+        clf.to(device)
+        
+        ## train_valid split!
+        tr_loader, val_loader = train_valid_split(train_loader,tr_num,args.val_ratio,random_seed = it)
+        
+        ## training the model
+        train_model(clf, tr_loader, clf_criterion, clf_optimizer, device, 
+                    args.epochs, test_loader, liveloss, args.problem_type)
+        
+        if args.save_model:
+            model_path = args.problem_type+args.model_type+"_%d.pt"%(it)
+            torch.save(clf.state_dict(),os.path.join(args.save_dir, model_path))
+        
+        ## find the worst group and select a batch!
+        worst_loader = test_groupwise(clf, tr_loader, clf_criterion, device, 
+                                      args.AL_select, args.problem_type, return_loader = True, test_loader = val_loader)
+        
+                 
+        sidx = select_examples(clf, worst_loader,select_loader,device,args.AL_batch,
+                                             args.sel_fn, **args.sel_args)
+#         print(sidx.shape)    
+        #select loader is not shuffle!
+        train_loader, select_loader = obtain_newDS_rev(train_loader, select_loader, 
+                                                       sidx, args.batch_size)
+    
+    if args.save_model:
+        data_file = os.path.join(args.save_dir, "final_dataloader.pkl")
+        torch.save(train_loader,data_file)
+        print("final dataloader is saved in ", data_file)
+    
+    return clf, train_loader, select_loader
+
 
 def train_model(model, train_loader, criterion, optimizer, device, epochs, 
                 test_loader = None, liveloss = None, problem_type = 'binary'):
