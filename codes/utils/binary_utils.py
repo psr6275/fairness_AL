@@ -25,6 +25,17 @@ class BinaryNN(nn.Module):
 
     def forward(self, x):
         return torch.sigmoid(self.network(x))
+
+class BinaryLR(nn.Module):
+
+    def __init__(self, n_features):
+        super(BinaryNN, self).__init__()
+        self.network = nn.Sequential(
+            nn.Linear(n_features, 1)
+        )
+
+    def forward(self, x):
+        return torch.sigmoid(self.network(x))    
     
 class BinaryEntropy(nn.Module):
     def __init__(self,reduction='mean'):
@@ -71,6 +82,8 @@ class BinaryEntropy_stable(nn.Module):
 def construct_model_binary(model_type='NN', n_features = 32, **model_args):
     if model_type == 'NN':
         clf = BinaryNN(n_features, model_args['n_hidden'],model_args['p_dropout'])
+    elif model_type =='LR':
+        clf = BinaryLR(n_features)
     else:
         raise NotImplementedError("Other models need to be implemented")
     return clf
