@@ -29,7 +29,7 @@ class BinaryNN(nn.Module):
 class BinaryLR(nn.Module):
 
     def __init__(self, n_features):
-        super(BinaryNN, self).__init__()
+        super(BinaryLR, self).__init__()
         self.network = nn.Sequential(
             nn.Linear(n_features, 1)
         )
@@ -131,12 +131,16 @@ def compute_similarity_with_grad_binary(clf,val_loader,sel_loader,device,sel_bat
 
 def select_examples_binary(clf, val_loader, sel_loader, device, sel_batch_num, 
                            criterion_type, **sel_args):
+
     assert(criterion_type in ['identity','binary_entropy','random','entropy'])
+    
     if criterion_type in ['identity','binary_entropy']:
-        sel_idxs = compute_similarity_with_grad_binary(clf, val_loader, sel_loader, device, sel_batch_num, 
+        sidxs = compute_similarity_with_grad_binary(clf, val_loader, sel_loader, device, sel_batch_num, 
                                             criterion_type, **sel_args)
     elif criterion_type == 'entropy':
-        sel_idxs = compute_indv_entropy(clf, sel_loader, device,sel_batch_num)
+        sidxs = compute_indv_entropy(clf, sel_loader, device,sel_batch_num)
+    
     else:
-        sel_idxs = torch.randperm(sel_loader.dataset.tensors[0].shape[0])[:sel_batch_num]
-    return sel_idxs
+        sidxs = torch.randperm(sel_loader.dataset.tensors[0].shape[0])[:sel_batch_num]
+    
+    return sidxs

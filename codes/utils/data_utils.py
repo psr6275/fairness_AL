@@ -140,6 +140,7 @@ class NPsDataSet(TensorDataset):
     def __init__(self, *dataarrays):
         tensors = (torch.tensor(da).clone().detach().float() for da in dataarrays)
         super(NPsDataSet, self).__init__(*tensors)
+
 def train_valid_split(train_loader,train_num,val_ratio = 0.2,random_seed = 7):
     random.seed(random_seed)
     trainDS = train_loader.dataset
@@ -156,6 +157,7 @@ def train_valid_split(train_loader,train_num,val_ratio = 0.2,random_seed = 7):
     trloader = DataLoader(NPsDataSet(trds[0],trds[1],trds[2]),batch_size = train_loader.batch_size,shuffle=True)
     valloader = DataLoader(NPsDataSet(valds[0],valds[1],valds[2]),batch_size =train_loader.batch_size,shuffle=False)
     return trloader, valloader
+
     
 def convert_object_type_to_category(df):
     """Converts columns of type object to category."""
