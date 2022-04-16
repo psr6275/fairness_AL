@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 
+import copy
+
 class AverageVarMeter(object):
     def __init__(self):
         self.reset()

@@ -1,0 +1,14 @@
+../results/simulation/220327_2228
+../results/simulation/220327_2244
+## restart!
+../results/simulation/220328_2341
+../results/simulation/220328_2359
+../results/simulation/220329_0023
+../results/simulation/220329_0108
+../results/simulation/220329_0126
+../results/simulation/220329_0147
+## restart2!
+../results/simulation/220329_1245
+../results/simulation/220329_1302
+# new results!!
+../results/simulation/220414_1318

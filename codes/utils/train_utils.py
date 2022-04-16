@@ -330,7 +330,7 @@ def train_model(model, train_loader, criterion, optimizer, device, epochs,
                                                            device, problem_type)
             logs['test_loss'], logs['test_acc'] = test_model(model, test_loader, criterion, 
                                                            device, problem_type)
-            accv = logs['val_acc']
+            accv = logs['test_acc']
             
         elif test_loader is not None:
             logs['val_loss'], logs['val_acc'] = test_model(model, test_loader, criterion, 

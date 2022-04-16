@@ -1,0 +1,15 @@
+../results/simulation/220327_2216
+../results/simulation/220327_2248
+../results/simulation/220327_2306
+../results/simulation/220327_2352
+../results/simulation/220328_2340
+../results/simulation/220328_2356
+# restart!
+../results/simulation/220329_1247
+../results/simulation/220329_1304
+../results/simulation/220329_1322
+../results/simulation/220329_1341
+# new results!!
+../results/simulation/220414_1314
+../results/simulation/220414_1358
+../results/simulation/220414_1542

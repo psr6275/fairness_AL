@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from .eval_utils import AverageVarMeter, accuracy, accuracy_b
 from .data_utils import divide_groupsDL, make_dataloader
 from .binary_utils import construct_model_binary
-
+import copy
+import numpy as np
 
 class LinearScheduler:
     def __init__(self, start = 0.2, end = 1.0, iters = 10):
@@ -24,6 +25,38 @@ class ConstantScheduler:
         self.val = val
     def update(self,it):
         return
+
+def average_performance(save_dirs):
+    for i,sd in enumerate(save_dirs):
+        loss_gs, acc_gs, loss_log, acc_log = load_logs(sd)
+        if i==0:
+            lossgs = copy.deepcopy(loss_gs)
+            accgs = copy.deepcopy(acc_gs)
+            losslog = copy.deepcopy(loss_log)
+            acclog = copy.deepcopy(acc_log)
+        else:
+            for gk in lossgs.keys():
+                for gik in lossgs[gk].keys():
+                    lossgs[gk][gik] = np.row_stack((lossgs[gk][gik],loss_gs[gk][gik]))
+                    accgs[gk][gik] = np.row_stack((accgs[gk][gik],acc_gs[gk][gik]))
+            for gk in losslog.keys():
+                losslog[gk] = np.row_stack((losslog[gk], loss_log[gk]))
+                acclog[gk] = np.row_stack((acclog[gk], acc_log[gk]))
+                
+    for gk in lossgs.keys():
+        for gik in lossgs[gk].keys():
+            lossgs[gk][gik] = np.mean(lossgs[gk][gik],axis=0)
+            accgs[gk][gik] = np.mean(accgs[gk][gik],axis=0)
+    for gk in losslog.keys():
+        losslog[gk] = np.mean(losslog[gk], axis=0)
+        acclog[gk] = np.mean(acclog[gk], axis=0)
+    return lossgs, accgs, losslog, acclog    
+
+def plot_compare(arr_list, name_list):
+    for i,arr in enumerate(arr_list):
+        plt.plot(arr, '-', label=name_list[i])
+    plt.legend()
+    plt.show()
 
 def plot_results(loss_gs, acc_gs, loss_log, acc_log):
     fig1, axs1 = plt.subplots(1,2)
@@ -231,16 +264,16 @@ def test_model(model, test_loader, criterion, device, problem_type = 'binary'):
         acc_fn = accuracy_b
     else:
         acc_fn = accuracy
-        
-    for batch_idx, ts in enumerate(test_loader):
-        x = ts[0].to(device)
-        y = ts[1].to(device)
-        p_y = model(x)
-        loss = criterion(p_y,y)
-        acc = acc_fn(p_y.detach().cpu(), y.detach().cpu())
-#         acc = accuracy_b(p_y, y)
-        losses.update(loss,x.size(0))
-        accs.update(acc,x.size(0))
-        del ts,x,y,loss
+    with torch.no_grad():    
+        for batch_idx, ts in enumerate(test_loader):
+            x = ts[0].to(device)
+            y = ts[1].to(device)
+            p_y = model(x)
+            loss = criterion(p_y,y)
+            acc = acc_fn(p_y.detach().cpu(), y.detach().cpu())
+    #         acc = accuracy_b(p_y, y)
+            losses.update(loss,x.size(0))
+            accs.update(acc,x.size(0))
+            del ts,x,y,loss
         
     return losses.avg.detach().cpu(), accs.avg.detach().cpu()

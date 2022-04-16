@@ -139,7 +139,17 @@ def select_examples_binary(clf, val_loader, sel_loader, device, sel_batch_num,
                                             criterion_type, **sel_args)
     elif criterion_type == 'entropy':
         sidxs = compute_indv_entropy(clf, sel_loader, device,sel_batch_num)
-    
+    elif criterion_type == ['entropy_be', 'entropy_id']:
+        sidxs0 = compute_indv_entropy(clf, sel_loader, device,sel_args.ent_num)
+        if criterion_type == 'entropy_be':
+            cr_type = 'binary_entropy'
+        else:
+            cr_type = 'identity'
+        ds1 = sel_loader.dataset.tensors
+        sel_loader2 = DataLoader(NPsDataSet(ds1[0][sidxs0],ds1[1][sidxs0],ds1[2][sidxs0]),batch_size=sel_args.ent_num, shuffle=False)
+        sidxs1 = compute_similarity_with_grad_binary(clf, val_loader, sel_loader2, device, sel_batch_num, 
+                                            cr_type, **sel_args)
+        sidxs = torch.tensor([sidxs0[s1] for s1 in sidxs1])
     else:
         sidxs = torch.randperm(sel_loader.dataset.tensors[0].shape[0])[:sel_batch_num]
     
