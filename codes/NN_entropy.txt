@@ -13,3 +13,11 @@
 ../results/simulation/220414_1314
 ../results/simulation/220414_1358
 ../results/simulation/220414_1542
+../results/simulation/220416_1915
+../results/simulation/220416_1957
+../results/simulation/220416_2104
+../results/simulation/220417_0017
+../results/simulation/220417_1655
+../results/simulation/220417_1846
+../results/simulation/220417_1954
+../results/simulation/220417_2038

@@ -19,7 +19,7 @@ from utils import config
 parser = argparse.ArgumentParser(description="Train FairAL trained models")
 parser.add_argument(
     "--sel-type",
-    default="binary_entropy",
+    default="entropy_be",
     type=str,
     help="selection objective for gradient",
 )

@@ -79,14 +79,14 @@ def train_AL(train_loader,select_loader,device,args,test_loader=None,from_scratc
         gids.append(gid)
         
         if it<args.AL_iters-2:
-            sidx = select_examples(clf,worst_loader,select_loader,device,args.AL_batch,
+            sidx = select_examples(clf, train_loader,worst_loader,select_loader,device,args.AL_batch,
                                              args.sel_fn, **args.sel_args)
         elif it<args.AL_iters-1:
             if args.sel_num >args.AL_batch*(it+1):
-                sidx = select_examples(clf,worst_loader,select_loader,device,args.AL_batch,
+                sidx = select_examples(clf, train_loader,worst_loader,select_loader,device,args.AL_batch,
                                              args.sel_fn, **args.sel_args)
             else:
-                sidx = select_examples(clf,worst_loader,select_loader,device,args.sel_num - args.AL_batch*it,
+                sidx = select_examples(clf, train_loader,worst_loader,select_loader,device,args.sel_num - args.AL_batch*it,
                                              args.sel_fn, **args.sel_args)
         else:
             break
@@ -171,14 +171,14 @@ def train_AL_valid(train_loader, select_loader, device, args, test_loader=None,f
         gids.append(gid)
                  
         if it<args.AL_iters-2:
-            sidx = select_examples(clf,worst_loader,select_loader,device,args.AL_batch,
+            sidx = select_examples(clf, tr_loader,worst_loader,select_loader,device,args.AL_batch,
                                              args.sel_fn, **args.sel_args)
         elif it<args.AL_iters-1:
             if args.sel_num >args.AL_batch*(it+1):
-                sidx = select_examples(clf,worst_loader,select_loader,device,args.AL_batch,
+                sidx = select_examples(clf, tr_loader,worst_loader,select_loader,device,args.AL_batch,
                                              args.sel_fn, **args.sel_args)
             else:
-                sidx = select_examples(clf,worst_loader,select_loader,device,args.sel_num - args.AL_batch*it,
+                sidx = select_examples(clf, tr_loader,worst_loader,select_loader,device,args.sel_num - args.AL_batch*it,
                                              args.sel_fn, **args.sel_args)
         else:
             break
@@ -261,15 +261,15 @@ def train_AL_valid_trgrad(train_loader, select_loader, device, args, test_loader
         gids.append(gid)
                  
         if it<args.AL_iters-2:
-            sidx = select_examples(clf,worst_loader,select_loader,device,args.AL_batch,
+            sidx = select_examples(clf, tr_loader,worst_loader,select_loader,device,args.AL_batch,
                                              args.sel_fn, **args.sel_args)
         elif it<args.AL_iters-1:
             if args.sel_num >args.AL_batch*(it+1):
-                sidx = select_examples(clf,worst_loader,select_loader,device,args.AL_batch,
+                sidx = select_examples(clf, tr_loader,worst_loader,select_loader,device,args.AL_batch,
                                              args.sel_fn, **args.sel_args)
             else:
                 print("remaining data:", args.sel_num - args.AL_batch*it)
-                sidx = select_examples(clf,worst_loader,select_loader,device,args.sel_num - args.AL_batch*it,
+                sidx = select_examples(clf, tr_loader,worst_loader,select_loader,device,args.sel_num - args.AL_batch*it,
                                              args.sel_fn, **args.sel_args)
         else:
             break
@@ -289,7 +289,7 @@ def train_AL_valid_trgrad(train_loader, select_loader, device, args, test_loader
 
 def train_model(model, train_loader, criterion, optimizer, device, epochs, 
                 test_loader = None, val_loader = None, liveloss = None, problem_type = 'binary'):
-    model.train()
+#     model.train()
     if liveloss is None:
         liveloss = PlotLosses()
     
@@ -302,7 +302,7 @@ def train_model(model, train_loader, criterion, optimizer, device, epochs,
     best_acc = 0.0
     
     for epoch in range(epochs):
-        model.train()
+        model.train().to(device)
         losses = AverageVarMeter()
         accs = AverageVarMeter()
         
@@ -347,5 +347,6 @@ def train_model(model, train_loader, criterion, optimizer, device, epochs,
         liveloss.send()
         
     print('Finished Training')
+    model.cpu()
     return best_clf
 

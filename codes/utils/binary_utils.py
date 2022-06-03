@@ -105,7 +105,7 @@ def compute_indv_entropy(clf, dataloader, device,sel_batch_num):
 
 def compute_similarity_with_grad_binary(clf,val_loader,sel_loader,device,sel_batch_num,
                                         criterion_type = 'identity', param_names=None, 
-                                        last_layer=True,sel_idxs=None, normalize=True): 
+                                        last_layer=True,sel_idxs=None, normalize=True, ent_num=None): 
     # val_loader consists of validation data for a chosen group
     assert(criterion_type in ['identity','binary_entropy'])
     if criterion_type == 'identity':
@@ -129,13 +129,47 @@ def compute_similarity_with_grad_binary(clf,val_loader,sel_loader,device,sel_bat
         
     return max_outs[1]
 
-def select_examples_binary(clf, val_loader, sel_loader, device, sel_batch_num, 
+def compute_similarity_with_grad_binary_sign(clf, whole_loader, val_loader,sel_loader,device,sel_batch_num,
+                                        criterion_type = 'identity', param_names=None, 
+                                        last_layer=True,sel_idxs=None, normalize=True, ent_num=None): 
+    # val_loader consists of validation data for a chosen group
+    assert(criterion_type in ['be_sign'])
+    if criterion_type == 'identity':
+        ## identity
+        criterion = IdentityOutput(reduction ='sum')
+    else:
+        ## binary_entropy
+        criterion = BinaryEntropy(reduction ='sum')
+        
+    whole_wgrad = compute_mean_grad_dic(clf, whole_loader,device, criterion,
+                                      use_label = False, param_names=param_names, last_layer = last_layer,
+                                      sel_idxs=sel_idxs, normalize=False, dictionary=False)
+    val_wgrad = compute_mean_grad_dic(clf, val_loader,device, criterion,
+                                      use_label = False, param_names=param_names, last_layer = last_layer,
+                                      sel_idxs=sel_idxs, normalize=False, dictionary=False)
+    
+    mean_wgrad = torch.sign(val_wgrad)-torch.sign(whole_wgrad)
+            
+    ind_wgrad = compute_indv_grad_dic(clf, sel_loader, device, criterion, use_label = False, 
+                                         param_names=param_names, last_layer = last_layer,
+                                         sel_idxs=sel_idxs, dictionary=False)
+
+    sim = torch.matmul(ind_wgrad,mean_wgrad)
+#     print(sim.shape)
+    max_outs = torch.topk(sim,sel_batch_num)
+        
+    return max_outs[1]
+
+def select_examples_binary(clf, whole_loader, val_loader, sel_loader, device, sel_batch_num, 
                            criterion_type, **sel_args):
 
-    assert(criterion_type in ['identity','binary_entropy','random','entropy'])
+    assert(criterion_type in ['identity','binary_entropy','random','entropy','be_sign', 'entropy_be', 'entropy_id'])
     
     if criterion_type in ['identity','binary_entropy']:
         sidxs = compute_similarity_with_grad_binary(clf, val_loader, sel_loader, device, sel_batch_num, 
+                                            criterion_type, **sel_args)
+    elif criterion_type in ['be_sign']:
+        sidxs = compute_similarity_with_grad_binary_sign(clf, whole_loader,val_loader, sel_loader, device, sel_batch_num, 
                                             criterion_type, **sel_args)
     elif criterion_type == 'entropy':
         sidxs = compute_indv_entropy(clf, sel_loader, device,sel_batch_num)
@@ -145,6 +179,8 @@ def select_examples_binary(clf, val_loader, sel_loader, device, sel_batch_num,
             cr_type = 'binary_entropy'
         else:
             cr_type = 'identity'
+        if sel_args.ent_num < sel_batch_num:
+            sel_args.ent_num = sel_batch_num
         ds1 = sel_loader.dataset.tensors
         sel_loader2 = DataLoader(NPsDataSet(ds1[0][sidxs0],ds1[1][sidxs0],ds1[2][sidxs0]),batch_size=sel_args.ent_num, shuffle=False)
         sidxs1 = compute_similarity_with_grad_binary(clf, val_loader, sel_loader2, device, sel_batch_num, 

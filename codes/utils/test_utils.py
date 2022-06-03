@@ -4,7 +4,7 @@ import os, glob ## glob has useful functions for directory
 import pickle
 import matplotlib.pyplot as plt
 
-from .eval_utils import AverageVarMeter, accuracy, accuracy_b
+from .eval_utils import AverageVarMeter, accuracy, accuracy_b, binary_scores
 from .data_utils import divide_groupsDL, make_dataloader
 from .binary_utils import construct_model_binary
 import copy
@@ -254,7 +254,72 @@ def test_group_perf(clf, test_loader, clf_criterion, device,
         
     return loss_g, acc_g, losss, accs
     
+def predict_model(model, test_loader, device,as_np = False):
+    model.to(device).eval()
+    preds = []
+    ys = []
+    zs = []
+    with torch.no_grad():
+        for batch_idx, ts in enumerate(test_loader):
+            ys.append(ts[1])
+            if len(ts)>2:
+                zs.append(ts[2])
+            preds.append(model(ts[0].to(device)).detach().cpu())
+            del ts
+    preds = torch.cat(preds,0)
+    ys = torch.cat(ys,0)
+    if len(zs)>0:
+        zs = torch.cat(zs,0)
+    else:
+        zs = torch.tensor(zs)
+    if as_np:
+        return preds.numpy(), ys.numpy(), zs.numpy()
+    else:
+        return preds, ys, zs
+    
+def test_binary_model(model, test_loader, device):
+    preds, ys, zs = predict_model(model, test_loader, device)
+    res = []
+    print("="*30)
+    print("binary scores for all data")
+    print("="*30)
+    res.append(binary_scores(preds,ys, prob=True, thres = 0.5))
+    if len(zs)>0:
+        zu = torch.unique(zs)
+        for zi in zu:
+            print("="*30)
+            print("binary score for group: ",zi.item())
+            print("="*30)
+            zidx = zs ==zi
+            res.append(binary_scores(preds[zidx].view(-1,1),ys[zidx].view(-1,1), 
+                          prob=True, thres = 0.5))
+    return res
 
+def test_sklearn_model(model, test_loader):
+    preds = torch.tensor(model.predict_proba(test_loader.dataset.tensors[0].numpy())[:,1]).view(-1,1)
+
+    ys = test_loader.dataset.tensors[1]
+    if len(test_loader.dataset.tensors)>2:
+        zs = test_loader.dataset.tensors[2]
+    else:
+        zs = torch.tensor([])
+#     print(preds.shape, ys.shape, zs.shape)
+    res = []
+    print("="*30)
+    print("binary scores for all data")
+    print("="*30)
+    res.append(binary_scores(preds,ys, prob=True, thres = 0.5))
+    if len(zs)>0:
+        zu = torch.unique(zs)
+        for zi in zu:
+            print("="*30)
+            print("binary score for group: ",zi.item())
+            print("="*30)
+            zidx = zs ==zi
+            res.append(binary_scores(preds[zidx].view(-1,1),ys[zidx].view(-1,1), 
+                          prob=True, thres = 0.5))
+    return res
+    
 def test_model(model, test_loader, criterion, device, problem_type = 'binary'):
     model.to(device).eval()
     losses = AverageVarMeter()
@@ -275,5 +340,5 @@ def test_model(model, test_loader, criterion, device, problem_type = 'binary'):
             losses.update(loss,x.size(0))
             accs.update(acc,x.size(0))
             del ts,x,y,loss
-        
+    model.cpu()    
     return losses.avg.detach().cpu(), accs.avg.detach().cpu()

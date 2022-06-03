@@ -15,6 +15,9 @@ from utils.test_utils import save_logs, load_logs
 from sklearn.linear_model import LogisticRegression as LogR
 import numpy as np
 
+import warnings
+warnings.filterwarnings("ignore")
+
 parser = argparse.ArgumentParser(description="Test FairAL trained models")
 parser.add_argument(
     "--save-dir",
